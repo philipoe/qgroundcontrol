@@ -12,6 +12,7 @@
 #include "UAS.h"
 #include "PxQuadMAV.h"
 #include "senseSoarMAV.h"
+#include "ASLUAV.h"
 
 class QGCMAVLinkUASFactory : public QObject
 {

@@ -501,6 +501,7 @@ HEADERS += \
     src/uas/QGCUASWorker.h \
     src/CmdLineOptParser.h \
     src/uas/QGXPX4UAS.h \
+    src/uas/ASLUAV.h \
     src/ui/AutoTrim.h
 
 SOURCES += \
@@ -658,6 +659,7 @@ SOURCES += \
     src/uas/QGCUASWorker.cc \
     src/CmdLineOptParser.cc \
     src/uas/QGXPX4UAS.cc \
+    src/uas/ASLUAV.cc \
     src/ui/AutoTrim.cpp
 
 #

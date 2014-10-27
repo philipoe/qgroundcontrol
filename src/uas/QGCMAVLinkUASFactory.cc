@@ -67,6 +67,20 @@ UASInterface* QGCMAVLinkUASFactory::createUAS(MAVLinkProtocol* mavlink, LinkInte
         uas = px4;
     }
     break;
+    case MAV_AUTOPILOT_ASLUAV:
+    {
+        ASLUAV* asluav = new ASLUAV(mavlink, worker, sysid);
+        // Set the system type
+        asluav->setSystemType((int)heartbeat->type);
+
+        // Connect this robot to the UAS object
+        // it is IMPORTANT here to use the right object type,
+        // else the slot of the parent object is called (and thus the special
+        // packets never reach their goal)
+        connect(mavlink, SIGNAL(messageReceived(LinkInterface*, mavlink_message_t)), asluav, SLOT(receiveMessage(LinkInterface*, mavlink_message_t)));
+        uas = asluav;
+    }
+    break;
 #ifdef QGC_USE_SENSESOAR_MESSAGES
 	case MAV_AUTOPILOT_SENSESOAR:
 		{
