@@ -71,6 +71,10 @@ This file is part of the QGROUNDCONTROL project
 #include "QGCUASFileViewMulti.h"
 #include <QDesktopWidget>
 
+#ifdef QGC_USE_ASLUAV_MESSAGES
+#include "AutoTrim.h"
+#endif
+
 #ifdef QGC_OSG_ENABLED
 #include "Q3DWidgetFactory.h"
 #endif
@@ -608,6 +612,11 @@ void MainWindow::buildCommonWidgets()
     QGCTabbedInfoView *infoview = new QGCTabbedInfoView(this);
     infoview->addSource(mavlinkDecoder);
     createDockWidget(pilotView,infoview,tr("Info View"),"UAS_INFO_INFOVIEW_DOCKWIDGET",VIEW_FLIGHT,Qt::LeftDockWidgetArea);
+
+#ifdef QGC_USE_ASLUAV_MESSAGES
+	//Added (ASL/PhilippOe)
+	createDockWidget(engineeringView, new AutoTrim(this), tr("AutoTrim"), "AUTO_TRIM", VIEW_ENGINEER, Qt::RightDockWidgetArea);
+#endif
 
     // Custom widgets, added last to all menus and layouts
     buildCustomWidget();

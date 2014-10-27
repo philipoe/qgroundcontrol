@@ -333,7 +333,8 @@ FORMS += \
     src/ui/px4_configuration/QGCPX4SensorCalibration.ui \
     src/ui/px4_configuration/PX4RCCalibration.ui \
     src/ui/px4_configuration/PX4FirmwareUpgrade.ui \
-    src/ui/QGCUASFileView.ui
+    src/ui/QGCUASFileView.ui \
+    src/ui/AutoTrim.ui
 
 HEADERS += \
     src/MG.h \
@@ -499,7 +500,8 @@ HEADERS += \
     src/ui/QGCUASFileView.h \
     src/uas/QGCUASWorker.h \
     src/CmdLineOptParser.h \
-    src/uas/QGXPX4UAS.h
+    src/uas/QGXPX4UAS.h \
+    src/ui/AutoTrim.h
 
 SOURCES += \
     src/main.cc \
@@ -655,7 +657,8 @@ SOURCES += \
     src/ui/QGCUASFileView.cc \
     src/uas/QGCUASWorker.cc \
     src/CmdLineOptParser.cc \
-    src/uas/QGXPX4UAS.cc
+    src/uas/QGXPX4UAS.cc \
+    src/ui/AutoTrim.cpp
 
 #
 # Unit Test specific configuration goes here
