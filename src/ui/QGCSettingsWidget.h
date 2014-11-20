@@ -19,12 +19,11 @@ public:
 
 public slots:
     void styleChanged(int index);
-    void lineEditFinished();
-    void setDefaultStyle();
-    void selectStylesheet();
     void selectCustomMode(int mode);
-    void resetSettings();
 
+private slots:
+    void _deleteSettingsToggled(bool checked);
+    
 private:
     MainWindow* mainWindow;
     Ui::QGCSettingsWidget* ui;

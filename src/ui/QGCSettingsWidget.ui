@@ -108,45 +108,21 @@
             </item>
            </layout>
           </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="groupBox_2">
+         <property name="title">
+          <string>Danger Zone</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_4">
           <item>
-           <layout class="QHBoxLayout" name="DarkStyleLayout">
-            <item>
-             <widget class="QLabel" name="label">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <property name="text">
-               <string>Stylesheet:</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLineEdit" name="styleSheetFile"/>
-            </item>
-            <item>
-             <widget class="QPushButton" name="styleCustomButton">
-              <property name="text">
-               <string>Custom</string>
-              </property>
-              <property name="autoDefault">
-               <bool>false</bool>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="styleDefaultButton">
-              <property name="text">
-               <string>Default</string>
-              </property>
-              <property name="autoDefault">
-               <bool>false</bool>
-              </property>
-             </widget>
-            </item>
-           </layout>
+           <widget class="QCheckBox" name="deleteSettings">
+            <property name="text">
+             <string>Delete all saved settings on next boot</string>
+            </property>
+           </widget>
           </item>
          </layout>
         </widget>
@@ -163,29 +139,6 @@
           </size>
          </property>
         </spacer>
-       </item>
-       <item>
-        <widget class="QGroupBox" name="groupBox_2">
-         <property name="title">
-          <string>Danger Zone</string>
-         </property>
-         <layout class="QGridLayout" name="gridLayout" columnstretch="10,0">
-          <item row="1" column="1">
-           <widget class="QLabel" name="label_2">
-            <property name="text">
-             <string>Delete all settings, layouts and restore defaults</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="0">
-           <widget class="QPushButton" name="resetSettingsButton">
-            <property name="text">
-             <string>Reset Settings</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
        </item>
       </layout>
      </widget>

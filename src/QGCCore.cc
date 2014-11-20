@@ -45,7 +45,6 @@ This file is part of the QGROUNDCONTROL project
 #include "QGC.h"
 #include "QGCCore.h"
 #include "MainWindow.h"
-#include "QGCWelcomeMainWindow.h"
 #include "GAudioOutput.h"
 #include "CmdLineOptParser.h"
 
@@ -56,6 +55,8 @@ This file is part of the QGROUNDCONTROL project
 #include "MAVLinkSimulationLink.h"
 #include "SerialLink.h"
 
+const char* QGCCore::deleteAllSettingsKey = "DeleteAllSettingsNextBoot";
+const char* QGCCore::_settingsVersionKey = "SettingsVersion";
 
 /**
  * @brief Constructor for the main application.
@@ -68,19 +69,21 @@ This file is part of the QGROUNDCONTROL project
  **/
 
 
-QGCCore::QGCCore(bool firstStart, int &argc, char* argv[]) : QApplication(argc, argv),
-    restartRequested(false),
-    welcome(NULL)
+QGCCore::QGCCore(int &argc, char* argv[]) :
+    QApplication(argc, argv),
+    _mainWindow(NULL)
 {
-    // Exit main application when last window is closed
-    connect(this, SIGNAL(lastWindowClosed()), this, SLOT(quit()));
-
-    // Set application name
+    // Set application information
     this->setApplicationName(QGC_APPLICATION_NAME);
-    this->setApplicationVersion(QGC_APPLICATION_VERSION);
-    this->setOrganizationName(QGC::ORG_NAME);
-    this->setOrganizationDomain(QGC::ORG_DOMAIN);
-
+    this->setOrganizationName(QGC_ORG_NAME);
+    this->setOrganizationDomain(QGC_ORG_DOMAIN);
+    
+    // Version string is build from component parts. Format is:
+    //  vMajor.Minor.BuildNumber BuildType
+    QString versionString("v%1.%2.%3 %4");
+    versionString = versionString.arg(QGC_APPLICATION_VERSION_MAJOR).arg(QGC_APPLICATION_VERSION_MINOR).arg(QGC_APPLICATION_VERSION_BUILDNUMBER).arg(QGC_APPLICATION_VERSION_BUILDTYPE);
+    this->setApplicationVersion(versionString);
+    
     // Set settings format
     QSettings::setDefaultFormat(QSettings::IniFormat);
     
@@ -92,55 +95,51 @@ QGCCore::QGCCore(bool firstStart, int &argc, char* argv[]) : QApplication(argc, 
         { "--clear-settings",   &fClearSettingsOptions },
         // Add additional command line option flags here
     };
-
+    
     ParseCmdLineOptions(argc, argv, rgCmdLineOptions, sizeof(rgCmdLineOptions)/sizeof(rgCmdLineOptions[0]), false);
     
     QSettings settings;
-
+    
+    // The setting will delete all settings on this boot
+    fClearSettingsOptions |= settings.contains(deleteAllSettingsKey);
+    
     if (fClearSettingsOptions) {
         // User requested settings to be cleared on command line
         settings.clear();
+        settings.setValue(_settingsVersionKey, QGC_SETTINGS_VERSION);
+        settings.sync();
     }
     
-    // Show user an upgrade message if QGC got upgraded (see code below, after splash screen)
-    bool upgraded = false;
-    enum MainWindow::CUSTOM_MODE mode = MainWindow::CUSTOM_MODE_NONE;
-    QString lastApplicationVersion("");
-    if (settings.contains("QGC_APPLICATION_VERSION"))
-    {
-        QString qgcVersion = settings.value("QGC_APPLICATION_VERSION").toString();
-        if (qgcVersion != QGC_APPLICATION_VERSION)
-        {
-            lastApplicationVersion = qgcVersion;
-            settings.clear(); // Clear settings from different version
-            // Write current application version
-            settings.setValue("QGC_APPLICATION_VERSION", QGC_APPLICATION_VERSION);
-            upgraded = true;
+}
+
+bool QGCCore::init(void)
+{
+    QSettings settings;
+    
+    // Exit main application when last window is closed
+    connect(this, SIGNAL(lastWindowClosed()), this, SLOT(quit()));
+    
+    // Show user an upgrade message if the settings version has been bumped up
+    bool settingsUpgraded = false;
+    enum MainWindow::CUSTOM_MODE mode = MainWindow::CUSTOM_MODE_PX4;
+    if (settings.contains(_settingsVersionKey)) {
+        if (settings.value(_settingsVersionKey).toInt() != QGC_SETTINGS_VERSION) {
+            settingsUpgraded = true;
         }
-        else
-        {
-            mode = (enum MainWindow::CUSTOM_MODE) settings.value("QGC_CUSTOM_MODE", (int)MainWindow::CUSTOM_MODE_NONE).toInt();
-        }
+    } else if (settings.allKeys().count()) {
+        // Settings version key is missing and there are settings. This is an upgrade scenario.
+        settingsUpgraded = true;
     }
-    else
-    {
-        // If application version is not set, clear settings anyway
+    
+    if (settingsUpgraded) {
         settings.clear();
-        // Write current application version
-        settings.setValue("QGC_APPLICATION_VERSION", QGC_APPLICATION_VERSION);
+        settings.setValue(_settingsVersionKey, QGC_SETTINGS_VERSION);
     }
-
+    
+    mode = (enum MainWindow::CUSTOM_MODE) settings.value("QGC_CUSTOM_MODE", (int)MainWindow::CUSTOM_MODE_PX4).toInt();
+    
     settings.sync();
-
-    // "Bootload" the application
-    if ((!settings.contains("QGC_CUSTOM_MODE_STORED") || settings.value("QGC_CUSTOM_MODE_STORED") == false) && firstStart)
-    {
-        welcome = new QGCWelcomeMainWindow();
-        connect(welcome, SIGNAL(customViewModeSelected(MainWindow::CUSTOM_MODE)), this, SLOT(customViewModeSelected(MainWindow::CUSTOM_MODE)));
-        restartRequested = true;
-        return;
-    }
-
+    
     // Show splash screen
     QPixmap splashImage(":/files/images/splash.png");
     QSplashScreen* splashScreen = new QSplashScreen(splashImage);
@@ -149,7 +148,7 @@ QGCCore::QGCCore(bool firstStart, int &argc, char* argv[]) : QApplication(argc, 
     splashScreen->show();
     processEvents();
     splashScreen->showMessage(tr("Loading application fonts"), Qt::AlignLeft | Qt::AlignBottom, QColor(62, 93, 141));
-
+    
     // Load application font
     QFontDatabase fontDatabase = QFontDatabase();
     const QString fontFileName = ":/general/vera.ttf"; ///< Font file is part of the QRC file and compiled into the app
@@ -159,53 +158,51 @@ QGCCore::QGCCore(bool firstStart, int &argc, char* argv[]) : QApplication(argc, 
     // Avoid Using setFont(). In the Qt docu you can read the following:
     //     "Warning: Do not use this function in conjunction with Qt Style Sheets."
     // setFont(fontDatabase.font(fontFamilyName, "Roman", 12));
-
+    
     // Start the comm link manager
     splashScreen->showMessage(tr("Starting communication links"), Qt::AlignLeft | Qt::AlignBottom, QColor(62, 93, 141));
     startLinkManager();
-
+    
     // Start the UAS Manager
     splashScreen->showMessage(tr("Starting UAS manager"), Qt::AlignLeft | Qt::AlignBottom, QColor(62, 93, 141));
     startUASManager();
-
+    
     // Start the user interface
     splashScreen->showMessage(tr("Starting user interface"), Qt::AlignLeft | Qt::AlignBottom, QColor(62, 93, 141));
-
+    
     // The first call to instance() creates the MainWindow, so make sure it's passed the splashScreen.
-    mainWindow = MainWindow::instance_mode(splashScreen, mode);
-
+    _mainWindow = MainWindow::instance_mode(splashScreen, mode);
+    
     UDPLink* udpLink = NULL;
-
-    if (mainWindow->getCustomMode() == MainWindow::CUSTOM_MODE_WIFI)
+    
+    if (_mainWindow->getCustomMode() == MainWindow::CUSTOM_MODE_WIFI)
     {
         // Connect links
         // to make sure that all components are initialized when the
         // first messages arrive
         udpLink = new UDPLink(QHostAddress::Any, 14550);
         LinkManager::instance()->add(udpLink);
-    } else if (mainWindow->getCustomMode() == MainWindow::CUSTOM_MODE_PX4) {
-        udpLink = new UDPLink(QHostAddress::Any, 14550);
-        LinkManager::instance()->add(udpLink);
-        SerialLink *slink = new SerialLink();
-        LinkManager::instance()->add(slink);
     } else {
         // We want to have a default serial link available for "quick" connecting.
         SerialLink *slink = new SerialLink();
         LinkManager::instance()->add(slink);
     }
-
+    
 #ifdef QGC_RTLAB_ENABLED
     // Add OpalRT Link, but do not connect
     OpalLink* opalLink = new OpalLink();
     MainWindow::instance()->addLink(opalLink);
 #endif
-
+    
     // Remove splash screen
-    splashScreen->finish(mainWindow);
-
-    if (upgraded) mainWindow->showInfoMessage(tr("Default Settings Loaded"),
-                                              tr("qgroundcontrol has been upgraded from version %1 to version %2. Some of your user preferences have been reset to defaults for safety reasons. Please adjust them where needed.").arg(lastApplicationVersion).arg(QGC_APPLICATION_VERSION));
-
+    splashScreen->finish(_mainWindow);
+    
+    if (settingsUpgraded) {
+        _mainWindow->showInfoMessage(tr("Settings Cleared"),
+                                     tr("The format for QGroundControl saved settings has been modified. "
+                                        "Your saved settings have been reset to defaults."));
+    }
+    
     // Check if link could be connected
     if (udpLink && !udpLink->connect())
     {
@@ -216,17 +213,19 @@ QGCCore::QGCCore(bool firstStart, int &argc, char* argv[]) : QApplication(argc, 
         msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
         msgBox.setDefaultButton(QMessageBox::No);
         int ret = msgBox.exec();
-
+        
         // Close the message box shortly after the click to prevent accidental clicks
         QTimer::singleShot(15000, &msgBox, SLOT(reject()));
-
+        
         // Exit application
         if (ret == QMessageBox::Yes)
         {
             //mainWindow->close();
-            QTimer::singleShot(200, mainWindow, SLOT(close()));
+            QTimer::singleShot(200, _mainWindow, SLOT(close()));
         }
     }
+    
+    return true;
 }
 
 /**
@@ -235,23 +234,8 @@ QGCCore::QGCCore(bool firstStart, int &argc, char* argv[]) : QApplication(argc, 
  **/
 QGCCore::~QGCCore()
 {
-
-    if (welcome)
-    {
-        delete welcome;
-    } else {
-        //mainWindow->storeSettings();
-        //mainWindow->close();
-        //mainWindow->deleteLater();
-        // Delete singletons
-        // First systems
-        delete UASManager::instance();
-        // then links
-        delete LinkManager::instance();
-        // Finally the main window
-        //delete MainWindow::instance();
-        //The main window now autodeletes on close.
-    }
+    delete UASManager::instance();
+    delete LinkManager::instance();
 }
 
 /**
@@ -304,15 +288,4 @@ void QGCCore::startUASManager()
             //printf(QString("Loaded plugin from " + fileName + "\n").toStdString().c_str());
         }
     }
-}
-
-void QGCCore::customViewModeSelected(enum MainWindow::CUSTOM_MODE mode)
-{
-    QSettings settings;
-    settings.setValue("QGC_CUSTOM_MODE", (unsigned int)mode);
-    // Store settings only if requested by user
-    settings.setValue("QGC_CUSTOM_MODE_STORED", welcome->getStoreSettings());
-    settings.sync();
-    welcome->close();
-
 }

@@ -70,7 +70,6 @@ This file is part of the QGROUNDCONTROL project
 #include "UASControlParameters.h"
 #include "QGCMAVLinkInspector.h"
 #include "QGCMAVLinkLogPlayer.h"
-#include "QGCVehicleConfig.h"
 #include "MAVLinkDecoder.h"
 #include "QGCUASFileViewMulti.h"
 
@@ -143,17 +142,6 @@ public:
         return currentStyle;
     }
 
-    /** @brief Get current light visual stylesheet */
-    QString getLightStyleSheet() const
-    {
-        return lightStyleFileName;
-    }
-
-    /** @brief Get current dark visual stylesheet */
-    QString getDarkStyleSheet() const
-    {
-        return darkStyleFileName;
-    }
     /** @brief Get auto link reconnect setting */
     bool autoReconnectEnabled() const
     {
@@ -250,10 +238,8 @@ public slots:
 
     /** @brief Save power by reducing update rates */
     void enableLowPowerMode(bool enabled) { lowPowerMode = enabled; }
-    /** @brief Load a specific style.
-      * If it's a custom style, load the file indicated by the cssFile path.
-      */
-    bool loadStyle(QGC_MAINWINDOW_STYLE style, QString cssFile);
+    /** @brief Load the specified style. */
+    bool loadStyle(QGC_MAINWINDOW_STYLE style);
 
     /** @brief Add a custom tool widget */
     void createCustomWidget();
@@ -482,8 +468,6 @@ protected:
     LogCompressor* comp;
     QString screenFileName;
     QTimer* videoTimer;
-    QString darkStyleFileName;
-    QString lightStyleFileName;
     bool autoReconnect;
     MAVLinkSimulationLink* simulationLink;
     Qt::WindowStates windowStateVal;

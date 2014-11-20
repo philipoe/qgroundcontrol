@@ -35,6 +35,7 @@
 #include <QDir>
 #include <QFileDialog>
 #include <QDebug>
+#include <QMessageBox>
 
 /// @Brief Constructs a new PX4FirmwareUpgrade Widget. This widget is used within the PX4VehicleConfig set of screens.
 PX4FirmwareUpgrade::PX4FirmwareUpgrade(QWidget *parent) :
@@ -90,7 +91,8 @@ const PX4FirmwareUpgrade::stateMachineEntry* PX4FirmwareUpgrade::_getStateMachin
     static const char* msgFirmwareBoardEraseFailed = "Board erase failed.";
     static const char* msgFirmwareBoardFlashing = "Flashing new firmware onto board...";
     static const char* msgFirmwareBoardFlashError = "A failure has occured while flashing the new firmware to your board. "
-                                                        "This has left the board in an inconsistent state. "
+                                                        "This has left the board in an inconsistent state.\n\n"
+                                                        "There currently is an known issue which does not yet have a fix which may cause this.\n\n"
                                                         "You should click 'Try Again' to attempt the upgrade process again.";
     static const char* msgFirmwareBoardVerifying = "Verifying firmware on board...";
     static const char* msgFirmwareBoardVerifyError = "Verification of flash memory on board failed. "
@@ -287,12 +289,18 @@ void PX4FirmwareUpgrade::_findBoard(void)
 }
 
 /// @brief Called when board has been found by the findBoard process
-void PX4FirmwareUpgrade::_foundBoard(const QString portName, QString portDescription)
+void PX4FirmwareUpgrade::_foundBoard(bool firstTry, const QString portName, QString portDescription)
 {
-    _portName = portName;
-    _portDescription = portDescription;
-    _setupState(upgradeStateBootloaderSearch);
-    _findBootloader();
+    if (firstTry) {
+        // Board is still plugged
+        QMessageBox::critical(this, tr("Firmware Upgrade"), tr("You must unplug you board before beginning the Firmware Upgrade process."));
+        _cancel();
+    } else {
+        _portName = portName;
+        _portDescription = portDescription;
+        _setupState(upgradeStateBootloaderSearch);
+        _findBootloader();
+    }
 }
 
 /// @brief Begins the findBootloader process to connect to the bootloader

@@ -52,7 +52,7 @@ static struct full_mode_s modes_list_common[] = {
             0 },
 };
 
-static struct full_mode_s modes_list_px4[4];
+static struct full_mode_s modes_list_px4[5];
 
 UASControlWidget::UASControlWidget(QWidget *parent) : QWidget(parent),
     uasID(-1),
@@ -88,6 +88,9 @@ void UASControlWidget::updateModesList()
     modes_list_px4[3].baseMode = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED | MAV_MODE_FLAG_AUTO_ENABLED | MAV_MODE_FLAG_STABILIZE_ENABLED | MAV_MODE_FLAG_GUIDED_ENABLED;
     px4_cm.main_mode = PX4_CUSTOM_MAIN_MODE_AUTO;
     modes_list_px4[3].customMode = px4_cm.data;
+    modes_list_px4[4].baseMode = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED | MAV_MODE_FLAG_AUTO_ENABLED | MAV_MODE_FLAG_STABILIZE_ENABLED | MAV_MODE_FLAG_GUIDED_ENABLED;
+    px4_cm.main_mode = PX4_CUSTOM_MAIN_MODE_OFFBOARD;
+    modes_list_px4[4].customMode = px4_cm.data;
 
     // Detect autopilot type
     int autopilot = 0;
@@ -243,7 +246,7 @@ void UASControlWidget::transmitMode()
 
             UAS* uas = dynamic_cast<UAS*>(uas_iface);
 
-            if (uas->isHilEnabled()) {
+            if (uas->isHilEnabled() || uas->isHilActive()) {
                 mode.baseMode |= MAV_MODE_FLAG_HIL_ENABLED;
             } else {
                 mode.baseMode &= ~MAV_MODE_FLAG_HIL_ENABLED;

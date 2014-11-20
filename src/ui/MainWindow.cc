@@ -125,8 +125,6 @@ MainWindow::MainWindow(QWidget *parent):
     changingViewsFlag(false),
     mavlink(new MAVLinkProtocol()),
     centerStackActionGroup(new QActionGroup(this)),
-    darkStyleFileName(defaultDarkStyle),
-    lightStyleFileName(defaultLightStyle),
     autoReconnect(false),
     simulationLink(NULL),
     lowPowerMode(false),
@@ -145,14 +143,7 @@ void MainWindow::init()
 
     emit initStatusChanged(tr("Loading style"), Qt::AlignLeft | Qt::AlignBottom, QColor(62, 93, 141));
     qApp->setStyle("plastique");
-    if (currentStyle == QGC_MAINWINDOW_STYLE_LIGHT)
-    {
-        loadStyle(currentStyle, lightStyleFileName);
-    }
-    else
-    {
-        loadStyle(currentStyle, darkStyleFileName);
-    }
+    loadStyle(currentStyle);
 
     if (settings.contains("ADVANCED_MODE"))
     {
@@ -970,8 +961,6 @@ void MainWindow::loadSettings()
     settings.beginGroup("QGC_MAINWINDOW");
     autoReconnect = settings.value("AUTO_RECONNECT", autoReconnect).toBool();
     currentStyle = (QGC_MAINWINDOW_STYLE)settings.value("CURRENT_STYLE", currentStyle).toInt();
-    darkStyleFileName = settings.value("DARK_STYLE_FILENAME", darkStyleFileName).toString();
-    lightStyleFileName = settings.value("LIGHT_STYLE_FILENAME", lightStyleFileName).toString();
     lowPowerMode = settings.value("LOW_POWER_MODE", lowPowerMode).toBool();
     bool dockWidgetTitleBarEnabled = settings.value("DOCK_WIDGET_TITLEBARS",menuActionHelper->dockWidgetTitleBarsEnabled()).toBool();
     settings.endGroup();
@@ -984,8 +973,6 @@ void MainWindow::storeSettings()
     settings.beginGroup("QGC_MAINWINDOW");
     settings.setValue("AUTO_RECONNECT", autoReconnect);
     settings.setValue("CURRENT_STYLE", currentStyle);
-    settings.setValue("DARK_STYLE_FILENAME", darkStyleFileName);
-    settings.setValue("LIGHT_STYLE_FILENAME", lightStyleFileName);
     settings.endGroup();
     if (!aboutToCloseFlag && isVisible())
     {
@@ -993,7 +980,7 @@ void MainWindow::storeSettings()
         // Save the last current view in any case
         settings.setValue("CURRENT_VIEW", currentView);
         // Save the current window state, but only if a system is connected (else no real number of widgets would be present))
-        if (UASManager::instance()->getUASList().length() > 0) settings.setValue(getWindowStateKey(), saveState(QGC::applicationVersion()));
+        if (UASManager::instance()->getUASList().length() > 0) settings.setValue(getWindowStateKey(), saveState());
         // Save the current view only if a UAS is connected
         if (UASManager::instance()->getUASList().length() > 0) settings.setValue("CURRENT_VIEW_WITH_UAS_CONNECTED", currentView);
         // Save the current power mode
@@ -1074,43 +1061,49 @@ void MainWindow::enableAutoReconnect(bool enabled)
     autoReconnect = enabled;
 }
 
-bool MainWindow::loadStyle(QGC_MAINWINDOW_STYLE style, QString cssFile)
+bool MainWindow::loadStyle(QGC_MAINWINDOW_STYLE style)
 {
+    qDebug() << "LOAD STYLE" << style;
+    bool success = true;
+    QString styles;
+    
+    // Signal to the user that the app will pause to apply a new stylesheet
+    qApp->setOverrideCursor(Qt::WaitCursor);
+    
     // Store the new style classification.
     currentStyle = style;
-
-    // Load the new stylesheet.
-    QFile styleSheet(cssFile);
-
-    // Attempt to open the stylesheet.
-    if (styleSheet.open(QIODevice::ReadOnly | QIODevice::Text))
-    {
-        // Signal to the user that the app will pause to apply a new stylesheet
-        qApp->setOverrideCursor(Qt::WaitCursor);
-
-        qApp->setStyleSheet(styleSheet.readAll());
-
-        // And save the new stylesheet path.
-        if (currentStyle == QGC_MAINWINDOW_STYLE_LIGHT)
-        {
-            lightStyleFileName = cssFile;
-        }
-        else
-        {
-            darkStyleFileName = cssFile;
-        }
-
-        // And trigger any changes to other UI elements that are watching for
-        // theme changes.
-        emit styleChanged(style);
-
-        // Finally restore the cursor before returning.
-        qApp->restoreOverrideCursor();
-        return true;
+    
+    // The dark style sheet is the master. Any other selected style sheet just overrides
+    // the colors of the master sheet.
+    QFile masterStyleSheet(defaultDarkStyle);
+    if (masterStyleSheet.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        styles = masterStyleSheet.readAll();
+    } else {
+        qDebug() << "Unable to load master dark style sheet";
+        success = false;
     }
 
-    // Otherwise alert return a failure code.
-    return false;
+    if (success && style == QGC_MAINWINDOW_STYLE_LIGHT) {
+        qDebug() << "LOADING LIGHT";
+        // Load the slave light stylesheet.
+        QFile styleSheet(defaultLightStyle);
+        if (styleSheet.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            styles += styleSheet.readAll();
+        } else {
+            qDebug() << "Unable to load slave light sheet:";
+            success = false;
+        }
+    }
+
+    if (!styles.isEmpty()) {
+        qApp->setStyleSheet(styles);
+        emit styleChanged(style);
+    }
+    
+    // Finally restore the cursor before returning.
+    qApp->restoreOverrideCursor();
+    
+    return success;
 }
 
 /**
@@ -1448,7 +1441,7 @@ void MainWindow::setActiveUAS(UASInterface* uas)
     if (settings.contains(getWindowStateKey()))
     {
         SubMainWindow *win = qobject_cast<SubMainWindow*>(centerStack->currentWidget());
-        win->restoreState(settings.value(getWindowStateKey()).toByteArray(), QGC::applicationVersion());
+        win->restoreState(settings.value(getWindowStateKey()).toByteArray());
     }
 
 }
@@ -1605,7 +1598,7 @@ void MainWindow::storeViewState()
         widgetnames = widgetnames.mid(0,widgetnames.length()-1);
 
         settings.setValue(getWindowStateKey() + "WIDGETS",widgetnames);
-        settings.setValue(getWindowStateKey(), win->saveState(QGC::applicationVersion()));
+        settings.setValue(getWindowStateKey(), win->saveState());
         settings.setValue(getWindowStateKey()+"CENTER_WIDGET", centerStack->currentIndex());
         // Although we want save the state of the window, we do not want to change the top-leve state (minimized, maximized, etc)
         // therefore this state is stored here and restored after applying the rest of the settings in the new
@@ -1694,7 +1687,7 @@ void MainWindow::loadViewState()
     if (settings.contains(getWindowStateKey()))
     {
         SubMainWindow *win = qobject_cast<SubMainWindow*>(centerStack->currentWidget());
-        win->restoreState(settings.value(getWindowStateKey()).toByteArray(), QGC::applicationVersion());
+        win->restoreState(settings.value(getWindowStateKey()).toByteArray());
     }
 }
 void MainWindow::setAdvancedMode(bool isAdvancedMode)

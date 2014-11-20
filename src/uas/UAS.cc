@@ -956,32 +956,6 @@ void UAS::receiveMessage(LinkInterface* link, mavlink_message_t message)
             emit homePositionChanged(uasId, pos.latitude / 10000000.0, pos.longitude / 10000000.0, pos.altitude / 1000.0);
         }
             break;
-        case MAVLINK_MSG_ID_RC_CHANNELS_RAW:
-        {
-            mavlink_rc_channels_raw_t channels;
-            mavlink_msg_rc_channels_raw_decode(&message, &channels);
-
-            const unsigned int portWidth = 8; // XXX magic number
-
-            emit remoteControlRSSIChanged(channels.rssi/255.0f);
-            if (channels.chan1_raw != UINT16_MAX)
-                emit remoteControlChannelRawChanged(channels.port * portWidth + 0, channels.chan1_raw);
-            if (channels.chan2_raw != UINT16_MAX)
-                emit remoteControlChannelRawChanged(channels.port * portWidth + 1, channels.chan2_raw);
-            if (channels.chan3_raw != UINT16_MAX)
-                emit remoteControlChannelRawChanged(channels.port * portWidth + 2, channels.chan3_raw);
-            if (channels.chan4_raw != UINT16_MAX)
-                emit remoteControlChannelRawChanged(channels.port * portWidth + 3, channels.chan4_raw);
-            if (channels.chan5_raw != UINT16_MAX)
-                emit remoteControlChannelRawChanged(channels.port * portWidth + 4, channels.chan5_raw);
-            if (channels.chan6_raw != UINT16_MAX)
-                emit remoteControlChannelRawChanged(channels.port * portWidth + 5, channels.chan6_raw);
-            if (channels.chan7_raw != UINT16_MAX)
-                emit remoteControlChannelRawChanged(channels.port * portWidth + 6, channels.chan7_raw);
-            if (channels.chan8_raw != UINT16_MAX)
-                emit remoteControlChannelRawChanged(channels.port * portWidth + 7, channels.chan8_raw);
-        }
-            break;
         case MAVLINK_MSG_ID_RC_CHANNELS:
         {
             mavlink_rc_channels_t channels;
@@ -2553,8 +2527,8 @@ void UAS::requestParameter(int component, const QString& parameter)
     {
         emit textMessageReceived(uasId, 0, MAV_SEVERITY_WARNING, QString("QGC WARNING: Parameter name %1 is more than %2 bytes long. This might lead to errors and mishaps!").arg(parameter).arg(MAVLINK_MSG_PARAM_REQUEST_READ_FIELD_PARAM_ID_LEN-1));
     }
-    memcpy(read.param_id, parameter.toStdString().c_str(), qMax(parameter.length(), MAVLINK_MSG_PARAM_REQUEST_READ_FIELD_PARAM_ID_LEN));
-    read.param_id[15] = '\0'; // Enforce null termination
+    strncpy(read.param_id, parameter.toStdString().c_str(), sizeof(read.param_id));
+    read.param_id[sizeof(read.param_id) - 1] = '\0'; // Enforce null termination
     read.target_system = uasId;
     read.target_component = component;
     mavlink_msg_param_request_read_encode(mavlink->getSystemId(), mavlink->getComponentId(), &msg, &read);
@@ -2931,7 +2905,7 @@ bool UAS::emergencyKILL()
 void UAS::enableHilFlightGear(bool enable, QString options, bool sensorHil, QObject * configuration)
 {
     Q_UNUSED(configuration);
-    
+
     QGCFlightGearLink* link = dynamic_cast<QGCFlightGearLink*>(simulation);
     if (!link || !simulation) {
         // Delete wrong sim
@@ -3140,13 +3114,26 @@ void UAS::sendHilSensors(quint64 time_us, float xacc, float yacc, float zacc, fl
 void UAS::sendHilOpticalFlow(quint64 time_us, qint16 flow_x, qint16 flow_y, float flow_comp_m_x,
                     float flow_comp_m_y, quint8 quality, float ground_distance)
 {
+    // FIXME: This needs to be updated for new mavlink_msg_hil_optical_flow_pack api
+
+    Q_UNUSED(time_us);
+    Q_UNUSED(flow_x);
+    Q_UNUSED(flow_y);
+    Q_UNUSED(flow_comp_m_x);
+    Q_UNUSED(flow_comp_m_y);
+    Q_UNUSED(quality);
+    Q_UNUSED(ground_distance);
+
     if (this->base_mode & MAV_MODE_FLAG_HIL_ENABLED)
     {
+#if 0
         mavlink_message_t msg;
         mavlink_msg_hil_optical_flow_pack(mavlink->getSystemId(), mavlink->getComponentId(), &msg,
-                                   time_us, 0, flow_x, flow_y, flow_comp_m_x, flow_comp_m_y, quality, ground_distance);
+                                   time_us, 0, 0 /* hack */, flow_x, flow_y, 0.0f /* hack */, 0.0f /* hack */, 0.0f /* hack */, 0 /* hack */, quality, ground_distance);
+
         sendMessage(msg);
         lastSendTimeOpticalFlow = QGC::groundTimeMilliseconds();
+#endif
     }
     else
     {
@@ -3367,6 +3354,8 @@ QString UAS::getShortModeTextFor(uint8_t base_mode, uint32_t custom_mode, int au
                 } else if (px4_mode.sub_mode == PX4_CUSTOM_SUB_MODE_AUTO_LAND) {
                     mode += "|LAND";
                 }
+            } else if (px4_mode.main_mode == PX4_CUSTOM_MAIN_MODE_OFFBOARD) {
+                mode += "|OFFBOARD";
             }
         }
     }

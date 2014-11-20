@@ -29,10 +29,11 @@
 #define PX4FirmwareUpgradeThread_H
 
 #include <QObject>
-#include <QSerialPort>
 #include <QThread>
 #include <QTimer>
 #include <QTime>
+
+#include "qextserialport.h"
 
 #include <stdint.h>
 
@@ -69,7 +70,7 @@ public slots:
     void erase(void);
     
 signals:
-    void foundBoard(const QString portname, QString portDescription);
+    void foundBoard(bool firstTry, const QString portname, QString portDescription);
     void foundBootloader(int bootloaderVersion, int boardID, int flashSize);
     void bootloaderSyncFailed(void);
     void error(const int command, const QString errorString);
@@ -85,12 +86,13 @@ private slots:
     
 private:
     PX4Bootloader*      _bootloader;
-    QSerialPort*        _bootloaderPort;
+    QextSerialPort*     _bootloaderPort;
     QTimer*             _timerTimeout;
     QTimer*             _timerRetry;
     QTime               _elapsed;
     QString             _portName;
     static const int    _retryTimeout = 1000;
+    bool                _findBoardFirstAttempt;
 };
 
 /// @brief Provides methods to interact with the bootloader. The commands themselves are signalled
@@ -129,9 +131,10 @@ public:
 
 signals:
     /// @brief Emitted by the findBoard process when it finds the board.
+    ///     @param firstTry true: board found on first attempt
     ///     @param portName Port that board is on
     ///     @param portDescription User friendly port description
-    void foundBoard(const QString portname, QString portDescription);
+    void foundBoard(bool firstTry, const QString portname, QString portDescription);
     
     /// @brief Emitted by the findBootloader process when has a connection to the bootloader
     void foundBootloader(int bootloaderVersion, int boardID, int flashSize);
@@ -164,7 +167,7 @@ signals:
     void _cancelFindOnThread(void);
     
 private slots:
-    void _foundBoard(const QString portname, QString portDescription);
+    void _foundBoard(bool firstTry, const QString portname, QString portDescription);
     void _foundBootloader(int bootloaderVersion, int boardID, int flashSize);
     void _bootloaderSyncFailed(void);
     void _error(const int errorCommand, const QString errorString) { emit error(errorCommand, errorString); }

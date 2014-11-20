@@ -78,7 +78,6 @@ public:
     void requestReset();
 
     bool isConnected() const;
-    qint64 bytesAvailable();
 
     /**
      * @brief The port handle
@@ -158,7 +157,6 @@ protected:
     int m_id;
     QMutex m_dataMutex;       // Mutex for reading data from m_port
     QMutex m_writeMutex;      // Mutex for accessing the m_transmitBuffer.
-    QList<QString> m_ports;
     QString type;
     bool m_is_cdc;
 

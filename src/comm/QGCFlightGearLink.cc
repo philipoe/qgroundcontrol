@@ -305,6 +305,9 @@ void QGCFlightGearLink::readBytes()
     {
         qDebug() << "RETURN LENGTH MISMATCHING EXPECTED" << nValues << "BUT GOT" << values.size();
         qDebug() << state;
+        emit showCriticalMessageFromThread(tr("FlightGear HIL"),
+                                           tr("Flight Gear protocol file '%1' is out of date. Quit QGroundControl. Delete the file and restart QGroundControl to fix.").arg(_fgProtocolFileFullyQualified));
+        disconnectSimulation();
         return;
     }
 
@@ -628,6 +631,21 @@ bool QGCFlightGearLink::connectSimulation()
 	QString     fgSceneryPath;					// FlightGear scenery path as specified by --fg-scenery
 	bool        fgSceneryDirOverride = false;	// true: User has specified --fg-scenery from ui options
     QDir        fgAppDir;						// Location of main FlightGear application
+
+    // Reset the list of arguments which will be provided to FG to the arguments set by the user via the UI
+    // First split the space seperated command line arguments coming in from the ui into a QStringList since
+    // that is what QProcess::start needs.
+    QStringList uiArgList;
+    bool mismatchedQuotes = parseUIArguments(startupArguments, uiArgList);
+    if (!mismatchedQuotes) {
+        MainWindow::instance()->showCriticalMessage(tr("FlightGear settings"), tr("Mismatched quotes in specified command line options"));
+        return false;
+    }
+#ifdef DEBUG_FLIGHTGEAR_CONNECT
+    qDebug() << "\nSplit arguments" << uiArgList << "\n";
+#endif
+    // Now set the FG arguments to the arguments from the UI
+    _fgArgList = uiArgList;
     
 #if defined Q_OS_MACX
     // Mac installs will default to the /Applications folder 99% of the time. Anything other than
@@ -744,22 +762,7 @@ bool QGCFlightGearLink::connectSimulation()
         fgAppFullyQualified = fgAppDir.absoluteFilePath(fgAppName);
     }
 #endif
-    
-	// Split the space seperated command line arguments coming in from the ui into a QStringList since
-	// that is what QProcess::start needs.
-	QStringList uiArgList;
-    bool mismatchedQuotes = parseUIArguments(startupArguments, uiArgList);
-    if (!mismatchedQuotes) {
-        MainWindow::instance()->showCriticalMessage(tr("FlightGear settings"), tr("Mismatched quotes in specified command line options"));
-        return false;
-    }
-    
-	// Add the user specified arguments to our argument list
-#ifdef DEBUG_FLIGHTGEAR_CONNECT
-	qDebug() << "\nSplit arguments" << uiArgList << "\n";
-#endif
-    _fgArgList += uiArgList;
-    
+     
     // If we have an --fg-root coming in from the ui options, that setting overrides any internal searching of
     // proposed locations.
     QString argValue;
@@ -857,8 +860,8 @@ bool QGCFlightGearLink::connectSimulation()
     // around this by specifying something on the FlightGear command line. FG code does direct append
     // of protocol xml file to $FG_ROOT and $FG_ROOT only allows a single directory to be specified.
     QString fgProtocolXmlFile = fgProtocol + ".xml";
-    QString fgProtocolFileFullyQualified = fgProtocolDir.absoluteFilePath(fgProtocolXmlFile);
-    if (!QFileInfo(fgProtocolFileFullyQualified).exists()) {
+    _fgProtocolFileFullyQualified = fgProtocolDir.absoluteFilePath(fgProtocolXmlFile);
+    if (!QFileInfo(_fgProtocolFileFullyQualified).exists()) {
         QMessageBox msgBox(QMessageBox::Critical,
                            tr("FlightGear Failed to Start"),
                            tr("FlightGear Failed to Start. QGroundControl protocol (%1) not installed to FlightGear Protocol directory (%2)").arg(fgProtocolXmlFile).arg(fgProtocolDir.path()),
@@ -878,21 +881,21 @@ bool QGCFlightGearLink::connectSimulation()
         }
         
         // Now that we made it this far, we should be able to try to copy the protocol file to FlightGear.
-        bool succeeded = QFile::copy(qgcProtocolFileFullyQualified, fgProtocolFileFullyQualified);
+        bool succeeded = QFile::copy(qgcProtocolFileFullyQualified, _fgProtocolFileFullyQualified);
         if (!succeeded) {
 #ifdef Q_OS_WIN32
-            QString copyCmd = QString("copy \"%1\" \"%2\"").arg(qgcProtocolFileFullyQualified).arg(fgProtocolFileFullyQualified);
+            QString copyCmd = QString("copy \"%1\" \"%2\"").arg(qgcProtocolFileFullyQualified).arg(_fgProtocolFileFullyQualified);
             copyCmd.replace("/", "\\");
 #else
-            QString copyCmd = QString("sudo cp %1 %2").arg(qgcProtocolFileFullyQualified).arg(fgProtocolFileFullyQualified);
+            QString copyCmd = QString("sudo cp %1 %2").arg(qgcProtocolFileFullyQualified).arg(_fgProtocolFileFullyQualified);
 #endif
             
             QMessageBox msgBox(QMessageBox::Critical,
                                tr("Copy failed"),
 #ifdef Q_OS_WIN32
-                               tr("Copy from (%1) to (%2) failed, possibly due to permissions issue. You will need to perform manually. Try pasting the following command into a Command Prompt which was started with Run as Administrator:\n\n").arg(qgcProtocolFileFullyQualified).arg(fgProtocolFileFullyQualified) + copyCmd,
+                               tr("Copy from (%1) to (%2) failed, possibly due to permissions issue. You will need to perform manually. Try pasting the following command into a Command Prompt which was started with Run as Administrator:\n\n").arg(qgcProtocolFileFullyQualified).arg(_fgProtocolFileFullyQualified) + copyCmd,
 #else
-                               tr("Copy from (%1) to (%2) failed, possibly due to permissions issue. You will need to perform manually. Try pasting the following command into a shell:\n\n").arg(qgcProtocolFileFullyQualified).arg(fgProtocolFileFullyQualified) + copyCmd,
+                               tr("Copy from (%1) to (%2) failed, possibly due to permissions issue. You will need to perform manually. Try pasting the following command into a shell:\n\n").arg(qgcProtocolFileFullyQualified).arg(_fgProtocolFileFullyQualified) + copyCmd,
 #endif
                                QMessageBox::Cancel,
                                MainWindow::instance());

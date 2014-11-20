@@ -30,10 +30,11 @@
 
 #include <QWidget>
 #include <QUrl>
-#include <QSerialPort>
 #include <QTimer>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
+
+#include "qextserialport.h"
 
 #include <stdint.h>
 
@@ -61,7 +62,7 @@ private slots:
     void _downloadProgress(qint64 curr, qint64 total);
     void _downloadFinished(void);
     void _downloadError(QNetworkReply::NetworkError code);
-    void _foundBoard(const QString portname, QString portDescription);
+    void _foundBoard(bool firstTry, const QString portname, QString portDescription);
     void _foundBootloader(int bootloaderVersion, int boardID, int flashSize);
     void _error(const int command, const QString errorString);
     void _bootloaderSyncFailed(void);

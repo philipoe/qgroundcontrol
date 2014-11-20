@@ -168,13 +168,35 @@
         <file>files/images/px4/airframes/plane_aert.png</file>
         <file>files/images/px4/airframes/quad_h.png</file>
         <file>files/images/px4/calibration/arrows.png</file>
-        <file>files/images/px4/calibration/accel_x+.png</file>
-        <file>files/images/px4/calibration/accel_x-.png</file>
-        <file>files/images/px4/calibration/accel_y-.png</file>
-        <file>files/images/px4/calibration/accel_z+.png</file>
-        <file>files/images/px4/calibration/accel_z-.png</file>
-        <file>files/images/px4/calibration/accel_y+.png</file>
+        <file>files/images/px4/calibration/accel_front.png</file>
+        <file>files/images/px4/calibration/accel_back.png</file>
+        <file>files/images/px4/calibration/accel_left.png</file>
+        <file>files/images/px4/calibration/accel_up.png</file>
+        <file>files/images/px4/calibration/accel_down.png</file>
+        <file>files/images/px4/calibration/accel_right.png</file>
         <file>files/images/px4/calibration/mag_calibration_figure8.png</file>
+        <file>files/images/px4/calibration/mode1/radioCenter.png</file>
+        <file>files/images/px4/calibration/mode1/radioHome.png</file>
+        <file>files/images/px4/calibration/mode1/radioRollLeft.png</file>
+        <file>files/images/px4/calibration/mode1/radioRollRight.png</file>
+        <file>files/images/px4/calibration/mode1/radioPitchUp.png</file>
+        <file>files/images/px4/calibration/mode1/radioPitchDown.png</file>
+        <file>files/images/px4/calibration/mode1/radioYawLeft.png</file>
+        <file>files/images/px4/calibration/mode1/radioYawRight.png</file>
+        <file>files/images/px4/calibration/mode1/radioThrottleUp.png</file>
+        <file>files/images/px4/calibration/mode1/radioThrottleDown.png</file>
+        <file>files/images/px4/calibration/mode1/radioSwitchMinMax.png</file>
+        <file>files/images/px4/calibration/mode2/radioCenter.png</file>
+        <file>files/images/px4/calibration/mode2/radioHome.png</file>
+        <file>files/images/px4/calibration/mode2/radioRollLeft.png</file>
+        <file>files/images/px4/calibration/mode2/radioRollRight.png</file>
+        <file>files/images/px4/calibration/mode2/radioPitchUp.png</file>
+        <file>files/images/px4/calibration/mode2/radioPitchDown.png</file>
+        <file>files/images/px4/calibration/mode2/radioYawLeft.png</file>
+        <file>files/images/px4/calibration/mode2/radioYawRight.png</file>
+        <file>files/images/px4/calibration/mode2/radioThrottleUp.png</file>
+        <file>files/images/px4/calibration/mode2/radioThrottleDown.png</file>
+        <file>files/images/px4/calibration/mode2/radioSwitchMinMax.png</file>
         <file>files/images/px4/menu/sensors.png</file>
         <file>files/images/px4/menu/firmware_upgrade.png</file>
         <file>files/images/px4/menu/plane.png</file>
@@ -205,5 +227,8 @@
     </qresource>
     <qresource prefix="/general">
         <file alias="vera.ttf">files/styles/Vera.ttf</file>
+    </qresource>
+    <qresource prefix="/unittest">
+        <file alias="MockLink.param">src/qgcunittest/MockLink.param</file>
     </qresource>
 </RCC>
