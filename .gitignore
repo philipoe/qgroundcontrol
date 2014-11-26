@@ -29,7 +29,7 @@ deploy/mac
 deploy/linux
 deploy/qgroundcontrol*
 controller_log*
-user_config.pri
+#user_config.pri #Commented by ASL(PhilippOe)
 *.app
 *.ncb
 *.vcproj
