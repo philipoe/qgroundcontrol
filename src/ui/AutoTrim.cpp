@@ -6,7 +6,7 @@
 
 #define MAVLINK_USE_CONVENIENCE_FUNCTIONS
 
-const float RAD2DEG = 180.0f/3.14159; //assumes multiplication with this constant for conversion
+const float RAD2DEG = 180.0f/3.14159f; //assumes multiplication with this constant for conversion
 
 //*******************************************************
 //*** Initialization (Construction/Destruction)
@@ -99,6 +99,7 @@ void AutoTrim::SetTrimDataVMax(void)
 void AutoTrim::SetTrimData(int velocityType)
 {
 	QMessageBox::information(this, tr("[AutoTrim] StartTrim"),tr("Not implemented. Please set the shown average trim values manually. "), QMessageBox::Ok);
+	Q_UNUSED(velocityType);
 	return;
 
 	/*if(bStarted) {
