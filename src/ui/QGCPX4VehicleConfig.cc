@@ -273,8 +273,8 @@ void QGCPX4VehicleConfig::setActiveUAS(UASInterface* active)
     
     bool px4Firmware = mav->getAutopilotType() == MAV_AUTOPILOT_PX4;
     ui->airframeMenuButton->setEnabled(px4Firmware);
-    ui->sensorMenuButton->setEnabled(px4Firmware);
-    ui->rcMenuButton->setEnabled(px4Firmware);
+    ui->sensorMenuButton->setEnabled(true);
+    ui->rcMenuButton->setEnabled(true);
     ui->advancedMenuButton->setEnabled(true);
 }
 
