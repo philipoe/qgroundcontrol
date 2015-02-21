@@ -2697,12 +2697,11 @@ void UAS::setExternalControlSetpoint(float roll, float pitch, float yaw, float t
                     );
         } else if (joystickMode == JoystickInput::JOYSTICK_MODE_FORCE) {
             // Send the the force setpoint (local pos sp external message)
-            // XXX: scale with thrust
             float dcm[3][3];
             mavlink_euler_to_dcm(roll, pitch, yaw, dcm);
-            const float fx = -dcm[0][2];
-            const float fy = -dcm[1][2];
-            const float fz = -dcm[2][2];
+            const float fx = -dcm[0][2] * thrust;
+            const float fy = -dcm[1][2] * thrust;
+            const float fz = -dcm[2][2] * thrust;
             uint16_t typeMask = (3<<10)|(7<<3)|(7<<0)|(1<<9); // select only FORCE control (disable everything else)
             mavlink_msg_set_position_target_local_ned_pack(mavlink->getSystemId(),
                     mavlink->getComponentId(),
