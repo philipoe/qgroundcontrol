@@ -2656,7 +2656,7 @@ void UAS::setExternalControlSetpoint(float roll, float pitch, float yaw, float t
             // send an external attitude setpoint command (rate control disabled)
             float attitudeQuaternion[4];
             mavlink_euler_to_quaternion(roll, pitch, yaw, attitudeQuaternion);
-            uint8_t typeMask = 0b111; // disable rate control
+            uint8_t typeMask = 0x7; // disable rate control
             mavlink_msg_set_attitude_target_pack(mavlink->getSystemId(),
                 mavlink->getComponentId(),
                 &message,
