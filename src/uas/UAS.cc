@@ -2624,15 +2624,12 @@ void UAS::setExternalControlSetpoint(float roll, float pitch, float yaw, float t
 
     // The default transmission rate is 25Hz, but when no inputs have changed it drops down to 5Hz.
     bool sendCommand = false;
-    if (countSinceLastTransmission++ >= 5)
-    {
+    if (countSinceLastTransmission++ >= 5) {
         sendCommand = true;
         countSinceLastTransmission = 0;
-    }
-    else if ((!isnan(roll) && roll != manualRollAngle) || (!isnan(pitch) && pitch != manualPitchAngle) ||
+    } else if ((!isnan(roll) && roll != manualRollAngle) || (!isnan(pitch) && pitch != manualPitchAngle) ||
              (!isnan(yaw) && yaw != manualYawAngle) || (!isnan(thrust) && thrust != manualThrust) ||
-             buttons != manualButtons)
-    {
+             buttons != manualButtons) {
         sendCommand = true;
 
         // Ensure that another message will be sent the next time this function is called
@@ -2640,8 +2637,7 @@ void UAS::setExternalControlSetpoint(float roll, float pitch, float yaw, float t
     }
 
     // Now if we should trigger an update, let's do that
-    if (sendCommand)
-    {
+    if (sendCommand) {
         // Save the new manual control inputs
         manualRollAngle = roll;
         manualPitchAngle = pitch;
@@ -2651,8 +2647,7 @@ void UAS::setExternalControlSetpoint(float roll, float pitch, float yaw, float t
 
         mavlink_message_t message;
 
-        if (joystickMode == JoystickInput::JOYSTICK_MODE_ATTITUDE)
-        {
+        if (joystickMode == JoystickInput::JOYSTICK_MODE_ATTITUDE) {
             // send an external attitude setpoint command (rate control disabled)
             float attitudeQuaternion[4];
             mavlink_euler_to_quaternion(roll, pitch, yaw, attitudeQuaternion);
@@ -2670,9 +2665,7 @@ void UAS::setExternalControlSetpoint(float roll, float pitch, float yaw, float t
                 0,
                 thrust
                 );
-        }
-        else if (joystickMode == JoystickInput::JOYSTICK_MODE_POSITION)
-        {
+        } else if (joystickMode == JoystickInput::JOYSTICK_MODE_POSITION) {
             // Send the the local position setpoint (local pos sp external message)
             static float px = 0;
             static float py = 0;
@@ -2702,9 +2695,7 @@ void UAS::setExternalControlSetpoint(float roll, float pitch, float yaw, float t
                     yaw,
                     0
                     );
-        }
-        else if (joystickMode == JoystickInput::JOYSTICK_MODE_FORCE)
-        {
+        } else if (joystickMode == JoystickInput::JOYSTICK_MODE_FORCE) {
             // Send the the force setpoint (local pos sp external message)
             // XXX: scale with thrust
             float dcm[3][3];
@@ -2733,9 +2724,7 @@ void UAS::setExternalControlSetpoint(float roll, float pitch, float yaw, float t
                     0,
                     0
                     );
-        }
-        else if (joystickMode == JoystickInput::JOYSTICK_MODE_VELOCITY)
-        {
+        } else if (joystickMode == JoystickInput::JOYSTICK_MODE_VELOCITY) {
             // Send the the local velocity setpoint (local pos sp external message)
             static float vx = 0;
             static float vy = 0;
@@ -2767,8 +2756,54 @@ void UAS::setExternalControlSetpoint(float roll, float pitch, float yaw, float t
                     0,
                     yawrate
                     );
-        }
-        else {
+        } else if (joystickMode == JoystickInput::JOYSTICK_MODE_MANUAL) {
+            if(((base_mode & MAV_MODE_FLAG_DECODE_POSITION_MANUAL) && (base_mode & MAV_MODE_FLAG_DECODE_POSITION_SAFETY)) || (base_mode & MAV_MODE_FLAG_HIL_ENABLED)) {
+
+                // Transmit the manual commands only if they've changed OR if it's been a little bit since they were last transmit. To make sure there aren't issues with
+                // response rate, we make sure that a message is transmit when the commands have changed, then one more time, and then switch to the lower transmission rate
+                // if no command inputs have changed.
+                // The default transmission rate is 50Hz, but when no inputs have changed it drops down to 5Hz.
+                bool sendCommand = false;
+                if (countSinceLastTransmission++ >= 10) {
+                    sendCommand = true;
+                    countSinceLastTransmission = 0;
+                } else if ((!isnan(roll) && roll != manualRollAngle) || (!isnan(pitch) && pitch != manualPitchAngle) ||
+                        (!isnan(yaw) && yaw != manualYawAngle) || (!isnan(thrust) && thrust != manualThrust) ||
+                        buttons != manualButtons) {
+                    sendCommand = true;
+
+                    // Ensure that another message will be sent the next time this function is called
+                    countSinceLastTransmission = 10;
+                }
+
+                // Now if we should trigger an update, let's do that
+                if (sendCommand) {
+                    // Save the new manual control inputs
+                    manualRollAngle = roll;
+                    manualPitchAngle = pitch;
+                    manualYawAngle = yaw;
+                    manualThrust = thrust;
+                    manualButtons = buttons;
+
+                    // Store scaling values for all 3 axes
+                    const float axesScaling = 1.0 * 1000.0;
+
+                    // Calculate the new commands for roll, pitch, yaw, and thrust
+                    const float newRollCommand = roll * axesScaling;
+                    // negate pitch value because pitch is negative for pitching forward but mavlink message argument is positive for forward
+                    const float newPitchCommand = -pitch * axesScaling;
+                    const float newYawCommand = yaw * axesScaling;
+                    const float newThrustCommand = thrust * axesScaling;
+
+                    // Send the MANUAL_COMMAND message
+                    mavlink_message_t message;
+                    mavlink_msg_manual_control_pack(mavlink->getSystemId(), mavlink->getComponentId(), &message, this->uasId, newPitchCommand, newRollCommand, newThrustCommand, newYawCommand, buttons);
+                    sendMessage(message);
+
+                    // Emit an update in control values to other UI elements, like the HSI display
+                    emit attitudeThrustSetPointChanged(this, roll, pitch, yaw, thrust, QGC::groundTimeMilliseconds());
+                }
+        } else {
             return;
         }
 
@@ -2776,6 +2811,7 @@ void UAS::setExternalControlSetpoint(float roll, float pitch, float yaw, float t
 
         // Emit an update in control values to other UI elements, like the HSI display
         emit attitudeThrustSetPointChanged(this, roll, pitch, yaw, thrust, QGC::groundTimeMilliseconds());
+        }
     }
 }
 
