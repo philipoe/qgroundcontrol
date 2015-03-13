@@ -52,6 +52,12 @@ void AutoTrim::ConnectToActiveUAS(void)
 	UASInterface* activeUAS = UASManager::instance()->getActiveUAS();
     ASLUAV *tempUAS=(ASLUAV*)activeUAS;
 
+	// Start connection here 
+	int ret = QMessageBox::information(this, tr("[AutoTrim] Connect"), tr("Connecting to UAS...Please always make sure that you have dynamic-pressure scaling disabled on the autopilot before starting the auto-trim!"), QMessageBox::Ok | QMessageBox::Cancel);
+	if (ret != QMessageBox::Ok) {
+		return;
+	}
+
 	if(tempUAS != NULL) {
 		connect(tempUAS, SIGNAL(AslctrlDataChanged(float,float,float,float,float,float,float,float,float,float)), this, SLOT(OnAslctrlDataChanged(float,float,float,float,float,float,float,float,float,float)));
 		connect(tempUAS, SIGNAL(AirspeedChanged(float)), this, SLOT(OnAirspeedChanged(float)));
@@ -64,16 +70,11 @@ void AutoTrim::ConnectToActiveUAS(void)
 
 void AutoTrim::StartTrim(void)
 {
-	// Start recording of data here. 
-	int ret = QMessageBox::information(this, tr("[AutoTrim] StartTrim"),tr("Starting trim data recording. Please always make sure that you have dynamic-pressure scaling disabled on the autopilot!"), QMessageBox::Ok | QMessageBox::Cancel);
-	
-	if(ret == QMessageBox::Ok) {
-		//Reset / Restart
-		ResetData();
-		bStarted=true;
-		m_ui->pb_StartTrim->setEnabled(false);
-		m_ui->pb_StopTrim->setEnabled(true);
-	}
+	//Reset / Restart
+	ResetData();
+	bStarted=true;
+	m_ui->pb_StartTrim->setEnabled(false);
+	m_ui->pb_StopTrim->setEnabled(true);
 }
 
 void AutoTrim::StopTrim(void)
