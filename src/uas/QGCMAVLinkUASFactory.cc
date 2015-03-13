@@ -1,6 +1,5 @@
 #include "QGCMAVLinkUASFactory.h"
 #include "UASManager.h"
-#include "QGCUASWorker.h"
 #include "QGXPX4UAS.h"
 
 QGCMAVLinkUASFactory::QGCMAVLinkUASFactory(QObject *parent) :
@@ -23,13 +22,11 @@ UASInterface* QGCMAVLinkUASFactory::createUAS(MAVLinkProtocol* mavlink, LinkInte
 
     UASInterface* uas;
 
-    QGCUASWorker* worker = new QGCUASWorker();
-
     switch (heartbeat->autopilot)
     {
     case MAV_AUTOPILOT_GENERIC:
     {
-        UAS* mav = new UAS(mavlink, worker, sysid);
+        UAS* mav = new UAS(mavlink, sysid);
         // Set the system type
         mav->setSystemType((int)heartbeat->type);
 
@@ -39,23 +36,9 @@ UASInterface* QGCMAVLinkUASFactory::createUAS(MAVLinkProtocol* mavlink, LinkInte
         uas = mav;
     }
     break;
-    case MAV_AUTOPILOT_PIXHAWK:
-    {
-        PxQuadMAV* mav = new PxQuadMAV(mavlink, worker, sysid);
-        // Set the system type
-        mav->setSystemType((int)heartbeat->type);
-
-        // Connect this robot to the UAS object
-        // it is IMPORTANT here to use the right object type,
-        // else the slot of the parent object is called (and thus the special
-        // packets never reach their goal)
-        connect(mavlink, SIGNAL(messageReceived(LinkInterface*, mavlink_message_t)), mav, SLOT(receiveMessage(LinkInterface*, mavlink_message_t)));
-        uas = mav;
-    }
-    break;
     case MAV_AUTOPILOT_PX4:
     {
-        QGXPX4UAS* px4 = new QGXPX4UAS(mavlink, worker, sysid);
+        QGXPX4UAS* px4 = new QGXPX4UAS(mavlink, sysid);
         // Set the system type
         px4->setSystemType((int)heartbeat->type);
 
@@ -69,7 +52,7 @@ UASInterface* QGCMAVLinkUASFactory::createUAS(MAVLinkProtocol* mavlink, LinkInte
     break;
     case MAV_AUTOPILOT_ASLUAV:
     {
-        ASLUAV* asluav = new ASLUAV(mavlink, worker, sysid);
+        ASLUAV* asluav = new ASLUAV(mavlink, sysid);
         // Set the system type
         asluav->setSystemType((int)heartbeat->type);
 
@@ -83,7 +66,7 @@ UASInterface* QGCMAVLinkUASFactory::createUAS(MAVLinkProtocol* mavlink, LinkInte
     break;
     default:
     {
-        UAS* mav = new UAS(mavlink, worker, sysid);
+        UAS* mav = new UAS(mavlink, sysid);
         mav->setSystemType((int)heartbeat->type);
 
         // Connect this robot to the UAS object
@@ -96,18 +79,17 @@ UASInterface* QGCMAVLinkUASFactory::createUAS(MAVLinkProtocol* mavlink, LinkInte
     break;
     }
 
-    // Get the UAS ready
-    worker->start(QThread::HighPriority);
-    connect(uas, SIGNAL(destroyed()), worker, SLOT(quit()));
-
     // Set the autopilot type
     uas->setAutopilotType((int)heartbeat->autopilot);
 
     // Make UAS aware that this link can be used to communicate with the actual robot
     uas->addLink(link);
 
+    // First thing we do with a new UAS is get the parameters
+    uas->getParamManager()->requestParameterList();
+    
     // Now add UAS to "official" list, which makes the whole application aware of it
     UASManager::instance()->addUAS(uas);
-
+    
     return uas;
 }

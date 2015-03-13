@@ -42,18 +42,17 @@ This file is part of the PIXHAWK project
 #include <QSpinBox>
 #include <QColor>
 #include <QPalette>
-#include <QFileDialog>
 #include <QStandardPaths>
-#include <QMessageBox>
 #include <QShortcut>
 
 #include "LinechartWidget.h"
 #include "LinechartPlot.h"
 #include "LogCompressor.h"
-#include "MainWindow.h"
 #include "QGC.h"
 #include "MG.h"
-
+#include "QGCFileDialog.h"
+#include "QGCMessageBox.h"
+#include "QGCApplication.h"
 
 LinechartWidget::LinechartWidget(int systemid, QWidget *parent) : QWidget(parent),
     sysid(systemid),
@@ -142,7 +141,7 @@ LinechartWidget::LinechartWidget(int systemid, QWidget *parent) : QWidget(parent
     createLayout();
 
     // And make sure we're listening for future style changes
-    connect(MainWindow::instance(), SIGNAL(styleChanged(MainWindow::QGC_MAINWINDOW_STYLE)), this, SLOT(recolor()));
+    connect(qgcApp(), &QGCApplication::styleChanged, this, &LinechartWidget::recolor);
 
     updateTimer->setInterval(updateInterval);
     connect(updateTimer, SIGNAL(timeout()), this, SLOT(refresh()));
@@ -186,13 +185,11 @@ void LinechartWidget::writeSettings()
     if (ui.showUnitsCheckBox) settings.setValue("SHOW_UNITS", ui.showUnitsCheckBox->isChecked());
     if (ui.shortNameCheckBox) settings.setValue("SHORT_NAMES", ui.shortNameCheckBox->isChecked());
     settings.endGroup();
-    settings.sync();
 }
 
 void LinechartWidget::readSettings()
 {
     QSettings settings;
-    settings.sync();
     settings.beginGroup("LINECHART");
     if (activePlot) {
         timeButton->setChecked(settings.value("ENFORCE_GROUNDTIME", timeButton->isChecked()).toBool());
@@ -434,49 +431,28 @@ void LinechartWidget::refresh()
     setUpdatesEnabled(true);
 }
 
-
 void LinechartWidget::startLogging()
 {
-    // Store reference to file
-    // Append correct file ending if needed
-    bool abort = false;
-
     // Check if any curve is enabled
     if (!activePlot->anyCurveVisible()) {
-        QMessageBox msgBox;
-        msgBox.setIcon(QMessageBox::Critical);
-        msgBox.setText("No curves selected for logging.");
-        msgBox.setInformativeText("Please check all curves you want to log. Currently no data would be logged, aborting the logging.");
-        msgBox.setStandardButtons(QMessageBox::Ok);
-        msgBox.setDefaultButton(QMessageBox::Ok);
-        msgBox.exec();
+        QGCMessageBox::critical(
+            tr("No curves selected for logging."),
+            tr("Please check all curves you want to log. Currently no data would be logged. Aborting the logging."));
         return;
     }
 
     // Let user select the log file name
-    //QDate date(QDate::currentDate());
+    // QDate date(QDate::currentDate());
     // QString("./pixhawk-log-" + date.toString("yyyy-MM-dd") + "-" + QString::number(logindex) + ".log")
-    QString fileName = QFileDialog::getSaveFileName(this, tr("Specify log file name"), QStandardPaths::writableLocation(QStandardPaths::DesktopLocation), tr("Logfile (*.log);;"));
+    QString fileName = QGCFileDialog::getSaveFileName(this,
+        tr("Save Log File"),
+        QStandardPaths::writableLocation(QStandardPaths::DesktopLocation),
+        tr("Log Files (*.log)"),
+        "log"); // Default type
 
-    while (!(fileName.endsWith(".log")) && !abort && fileName != "") {
-        QMessageBox msgBox;
-        msgBox.setIcon(QMessageBox::Critical);
-        msgBox.setText("Unsuitable file extension for logfile");
-        msgBox.setInformativeText("Please choose .log as file extension. Click OK to change the file extension, cancel to not start logging.");
-        msgBox.setStandardButtons(QMessageBox::Ok | QMessageBox::Cancel);
-        msgBox.setDefaultButton(QMessageBox::Ok);
-        if(msgBox.exec() != QMessageBox::Ok)
-        {
-            abort = true;
-            break;
-        }
-        fileName = QFileDialog::getSaveFileName(this, tr("Specify log file name"), QStandardPaths::writableLocation(QStandardPaths::DesktopLocation), tr("Logfile (*.log);;"));
-    }
+    qDebug() << "SAVE FILE " << fileName;
 
-    qDebug() << "SAVE FILE" << fileName;
-
-    // Check if the user did not abort the file save dialog
-    if (!abort && fileName != "") {
+    if (!fileName.isEmpty()) {
         logFile = new QFile(fileName);
         if (logFile->open(QIODevice::Truncate | QIODevice::WriteOnly | QIODevice::Text)) {
             logging = true;
@@ -500,17 +476,14 @@ void LinechartWidget::stopLogging()
         // Postprocess log file
         compressor = new LogCompressor(logFile->fileName(), logFile->fileName());
         connect(compressor, SIGNAL(finishedFile(QString)), this, SIGNAL(logfileWritten(QString)));
-        connect(compressor, SIGNAL(logProcessingStatusChanged(QString)), MainWindow::instance(), SLOT(showStatusMessage(QString)));
 
-        QMessageBox msgBox;
-        msgBox.setIcon(QMessageBox::Question);
-        msgBox.setText(tr("Starting Log Compression"));
-        msgBox.setInformativeText(tr("Should empty fields (e.g. due to packet drops) be filled with the previous value of the same variable (zero order hold)?"));
-        msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-        msgBox.setDefaultButton(QMessageBox::No);
-        int ret = msgBox.exec();
+        QMessageBox::StandardButton button = QGCMessageBox::question(
+            tr("Starting Log Compression"),
+            tr("Should empty fields (e.g. due to packet drops) be filled with the previous value of the same variable (zero order hold)?"),
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No);
         bool fill;
-        if (ret == QMessageBox::Yes)
+        if (button == QMessageBox::Yes)
         {
             fill = true;
         }
@@ -693,7 +666,7 @@ void LinechartWidget::removeCurve(QString curve)
 
 void LinechartWidget::recolor()
 {
-    activePlot->styleChanged(MainWindow::instance()->getStyle());
+    activePlot->styleChanged(qgcApp()->styleIsDark());
     foreach (QString key, colorIcons.keys())
     {
         QWidget* colorIcon = colorIcons.value(key, 0);

@@ -28,8 +28,6 @@ This file is part of the QGROUNDCONTROL project
  */
 
 #include <QFileInfo>
-#include <QFileDialog>
-#include <QMessageBox>
 #include <QStandardPaths>
 
 #include "MAVLinkSettingsWidget.h"
@@ -55,7 +53,6 @@ MAVLinkSettingsWidget::MAVLinkSettingsWidget(MAVLinkProtocol* protocol, QWidget 
 
     // Initialize state
     m_ui->heartbeatCheckBox->setChecked(protocol->heartbeatsEnabled());
-    m_ui->loggingCheckBox->setChecked(protocol->loggingEnabled());
     m_ui->versionCheckBox->setChecked(protocol->versionCheckEnabled());
     m_ui->multiplexingCheckBox->setChecked(protocol->multiplexingEnabled());
     m_ui->systemIdSpinBox->setValue(protocol->getSystemId());
@@ -71,14 +68,9 @@ MAVLinkSettingsWidget::MAVLinkSettingsWidget(MAVLinkProtocol* protocol, QWidget 
     // Heartbeat
     connect(protocol, SIGNAL(heartbeatChanged(bool)), m_ui->heartbeatCheckBox, SLOT(setChecked(bool)));
     connect(m_ui->heartbeatCheckBox, SIGNAL(toggled(bool)), protocol, SLOT(enableHeartbeats(bool)));
-    // Logging
-    connect(protocol, SIGNAL(loggingChanged(bool)), m_ui->loggingCheckBox, SLOT(setChecked(bool)));
-    connect(m_ui->loggingCheckBox, SIGNAL(toggled(bool)), protocol, SLOT(enableLogging(bool)));
     // Version check
     connect(protocol, SIGNAL(versionCheckChanged(bool)), m_ui->versionCheckBox, SLOT(setChecked(bool)));
     connect(m_ui->versionCheckBox, SIGNAL(toggled(bool)), protocol, SLOT(enableVersionCheck(bool)));
-    // Logfile
-    connect(m_ui->logFileButton, SIGNAL(clicked()), this, SLOT(chooseLogfileName()));
     // System ID
     connect(protocol, SIGNAL(systemIdChanged(int)), m_ui->systemIdSpinBox, SLOT(setValue(int)));
     connect(m_ui->systemIdSpinBox, SIGNAL(valueChanged(int)), protocol, SLOT(setSystemId(int)));
@@ -110,16 +102,10 @@ MAVLinkSettingsWidget::MAVLinkSettingsWidget(MAVLinkProtocol* protocol, QWidget 
 
     // Update values
     m_ui->versionLabel->setText(tr("MAVLINK_VERSION: %1").arg(protocol->getVersion()));
-    updateLogfileName(protocol->getLogfileName());
 
     // Connect visibility updates
     connect(protocol, SIGNAL(versionCheckChanged(bool)), m_ui->versionLabel, SLOT(setVisible(bool)));
     m_ui->versionLabel->setVisible(protocol->versionCheckEnabled());
-    // Logging visibility
-    connect(protocol, SIGNAL(loggingChanged(bool)), m_ui->logFileLabel, SLOT(setVisible(bool)));
-    m_ui->logFileLabel->setVisible(protocol->loggingEnabled());
-    connect(protocol, SIGNAL(loggingChanged(bool)), m_ui->logFileButton, SLOT(setVisible(bool)));
-    m_ui->logFileButton->setVisible(protocol->loggingEnabled());
 //    // Multiplexing visibility
 //    connect(protocol, SIGNAL(multiplexingChanged(bool)), m_ui->multiplexingFilterCheckBox, SLOT(setVisible(bool)));
 //    m_ui->multiplexingFilterCheckBox->setVisible(protocol->multiplexingEnabled());
@@ -146,39 +132,6 @@ MAVLinkSettingsWidget::MAVLinkSettingsWidget(MAVLinkProtocol* protocol, QWidget 
     m_ui->multiplexingFilterLineEdit->setVisible(false);
 }
 
-void MAVLinkSettingsWidget::updateLogfileName(const QString& fileName)
-{
-    QFileInfo file(fileName);
-    m_ui->logFileLabel->setText(file.fileName());
-}
-
-void MAVLinkSettingsWidget::chooseLogfileName()
-{
-    QString fileName = QFileDialog::getSaveFileName(this, tr("Specify MAVLink log file name"), QStandardPaths::writableLocation(QStandardPaths::DesktopLocation), tr("MAVLink Logfile (*.mavlink);;"));
-
-    if (!fileName.endsWith(".mavlink"))
-    {
-        fileName.append(".mavlink");
-    }
-
-    QFileInfo file(fileName);
-    if (file.exists() && !file.isWritable())
-    {
-        QMessageBox msgBox;
-        msgBox.setIcon(QMessageBox::Critical);
-        msgBox.setText(tr("The selected logfile is not writable"));
-        msgBox.setInformativeText(tr("Please make sure that the file %1 is writable or select a different file").arg(fileName));
-        msgBox.setStandardButtons(QMessageBox::Ok);
-        msgBox.setDefaultButton(QMessageBox::Ok);
-        msgBox.exec();
-    }
-    else
-    {
-        updateLogfileName(fileName);
-        protocol->setLogfileName(fileName);
-    }
-}
-
 void MAVLinkSettingsWidget::enableDroneOS(bool enable)
 {
     // Enable multiplexing
@@ -189,7 +142,7 @@ void MAVLinkSettingsWidget::enableDroneOS(bool enable)
 
     // Delete from all lists first
     UDPLink* firstUdp = NULL;
-    QList<LinkInterface*> links = LinkManager::instance()->getLinksForProtocol(protocol);
+    QList<LinkInterface*> links = LinkManager::instance()->getLinks();
     foreach (LinkInterface* link, links)
     {
         UDPLink* udp = dynamic_cast<UDPLink*>(link);
@@ -217,7 +170,6 @@ void MAVLinkSettingsWidget::enableDroneOS(bool enable)
         protocol->setAuthKey(m_ui->droneOSLineEdit->text().trimmed());
         QSettings settings;
         settings.setValue("DRONEOS_HOST", m_ui->droneOSComboBox->currentText());
-        settings.sync();
     }
     protocol->enableAuth(enable);
 }

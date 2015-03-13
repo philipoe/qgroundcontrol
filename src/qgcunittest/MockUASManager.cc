@@ -24,6 +24,7 @@
 #include "MockUASManager.h"
 
 MockUASManager::MockUASManager(void) :
+    UASManagerInterface(NULL),
     _mockUAS(NULL)
 {
     
@@ -49,7 +50,6 @@ void MockUASManager::setMockActiveUAS(MockUAS* mockUAS)
     {
         // We don't support swiching between different UAS
         //_mockUAS->setSelected();
-        emit activeUASSet(_mockUAS->getUASID());
         emit activeUASStatusChanged(_mockUAS, true);
         emit activeUASStatusChanged(_mockUAS->getUASID(), true);
     }

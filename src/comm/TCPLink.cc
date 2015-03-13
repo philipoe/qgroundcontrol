@@ -2,7 +2,7 @@
  
  QGroundControl Open Source Ground Control Station
  
- (c) 2009 - 2011 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ (c) 2009 - 2015 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  
  This file is part of the QGROUNDCONTROL project
  
@@ -37,78 +37,32 @@
 ///
 ///     @author Don Gagne <don@thegagnes.com>
 
-TCPLink::TCPLink(QHostAddress hostAddress, quint16 socketPort) :
-    _hostAddress(hostAddress),
-    _port(socketPort),
-    _socket(NULL),
-    _socketIsConnected(false)
+TCPLink::TCPLink(TCPConfiguration *config)
+    : _config(config)
+    , _socket(NULL)
+    , _socketIsConnected(false)
 {
+    Q_ASSERT(_config != NULL);
     // We're doing it wrong - because the Qt folks got the API wrong:
     // http://blog.qt.digia.com/blog/2010/06/17/youre-doing-it-wrong/
     moveToThread(this);
-
     _linkId = getNextLinkId();
-    _resetName();
-    
-    qDebug() << "TCP Created " << _name;
+    qDebug() << "TCP Created " << _config->name();
 }
 
 TCPLink::~TCPLink()
 {
-    disconnect();
-
+    _disconnect();
     // Tell the thread to exit
     quit();
     // Wait for it to exit
     wait();
-
-	deleteLater();
 }
 
 void TCPLink::run()
 {
     _hardwareConnect();
-
 	exec();
-}
-
-void TCPLink::setHostAddress(QHostAddress hostAddress)
-{
-    bool reconnect = false;
-    
-	if (this->isConnected()) {
-		disconnect();
-		reconnect = true;
-	}
-    
-	_hostAddress = hostAddress;
-    _resetName();
-    
-	if (reconnect) {
-		connect();
-	}
-}
-
-void TCPLink::setHostAddress(const QString& hostAddress)
-{
-    setHostAddress(QHostAddress(hostAddress));
-}
-
-void TCPLink::setPort(int port)
-{
-    bool reconnect = false;
-    
-	if (this->isConnected()) {
-		disconnect();
-		reconnect = true;
-	}
-    
-	_port = port;
-    _resetName();
-    
-	if (reconnect) {
-		connect();
-	}
 }
 
 #ifdef TCPLINK_READWRITE_DEBUG
@@ -129,7 +83,7 @@ void TCPLink::_writeDebugBytes(const char *data, qint16 size)
             ascii.append(219);
         }
     }
-    qDebug() << "Sent" << size << "bytes to" << _hostAddress.toString() << ":" << _port << "data:";
+    qDebug() << "Sent" << size << "bytes to" << _config->address().toString() << ":" << _config->port() << "data:";
     qDebug() << bytes;
     qDebug() << "ASCII:" << ascii;
 }
@@ -141,7 +95,6 @@ void TCPLink::writeBytes(const char* data, qint64 size)
     _writeDebugBytes(data, size);
 #endif
     _socket->write(data, size);
-
     // Log the amount and time written out for future data rate calculations.
     QMutexLocker dataRateLocker(&dataRateMutex);
     logDataRateToBuffer(outDataWriteAmounts, outDataWriteTimes, &outDataIndex, size, QDateTime::currentMSecsSinceEpoch());
@@ -156,20 +109,15 @@ void TCPLink::writeBytes(const char* data, qint64 size)
 void TCPLink::readBytes()
 {
     qint64 byteCount = _socket->bytesAvailable();
-    
     if (byteCount)
     {
         QByteArray buffer;
         buffer.resize(byteCount);
-        
         _socket->read(buffer.data(), buffer.size());
-        
         emit bytesReceived(this, buffer);
-
         // Log the amount and time received for future data rate calculations.
         QMutexLocker dataRateLocker(&dataRateMutex);
         logDataRateToBuffer(inDataWriteAmounts, inDataWriteTimes, &inDataIndex, byteCount, QDateTime::currentMSecsSinceEpoch());
-
 #ifdef TCPLINK_READWRITE_DEBUG
         writeDebugBytes(buffer.data(), buffer.size());
 #endif
@@ -181,21 +129,17 @@ void TCPLink::readBytes()
  *
  * @return True if connection has been disconnected, false if connection couldn't be disconnected.
  **/
-bool TCPLink::disconnect()
+bool TCPLink::_disconnect(void)
 {
 	quit();
 	wait();
-    
     if (_socket)
 	{
         _socketIsConnected = false;
 		_socket->deleteLater(); // Make sure delete happens on correct thread
 		_socket = NULL;
-
         emit disconnected();
-        emit connected(false);
 	}
-    
     return true;
 }
 
@@ -204,55 +148,46 @@ bool TCPLink::disconnect()
  *
  * @return True if connection has been established, false if connection couldn't be established.
  **/
-bool TCPLink::connect()
+bool TCPLink::_connect(void)
 {
 	if (isRunning())
 	{
 		quit();
 		wait();
 	}
-
     start(HighPriority);
-
     return true;
 }
 
-bool TCPLink::_hardwareConnect(void)
+bool TCPLink::_hardwareConnect()
 {
     Q_ASSERT(_socket == NULL);
 	_socket = new QTcpSocket();
-    
     QSignalSpy errorSpy(_socket, SIGNAL(error(QAbstractSocket::SocketError)));
-    
-    _socket->connectToHost(_hostAddress, _port);
-    
+    _socket->connectToHost(_config->address(), _config->port());
     QObject::connect(_socket, SIGNAL(readyRead()), this, SLOT(readBytes()));
     QObject::connect(_socket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(_socketError(QAbstractSocket::SocketError)));
-    
     // Give the socket a second to connect to the other side otherwise error out
     if (!_socket->waitForConnected(1000))
     {
         // Whether a failed connection emits an error signal or not is platform specific.
         // So in cases where it is not emitted, we emit one ourselves.
         if (errorSpy.count() == 0) {
-            emit communicationError(getName(), "Connection failed");
+            emit communicationError(tr("Link Error"), QString("Error on link %1. Connection failed").arg(getName()));
         }
         delete _socket;
         _socket = NULL;
         return false;
     }
-    
     _socketIsConnected = true;
-    emit connected(true);
     emit connected();
-
     return true;
 }
 
 void TCPLink::_socketError(QAbstractSocket::SocketError socketError)
 {
     Q_UNUSED(socketError);
-    emit communicationError(getName(), "Error on socket: " + _socket->errorString());
+    emit communicationError(tr("Link Error"), QString("Error on link %1. Error on socket: %2.").arg(getName()).arg(_socket->errorString()));
 }
 
 /**
@@ -272,7 +207,7 @@ int TCPLink::getId() const
 
 QString TCPLink::getName() const
 {
-    return _name;
+    return _config->name();
 }
 
 qint64 TCPLink::getConnectionSpeed() const
@@ -290,12 +225,6 @@ qint64 TCPLink::getCurrentOutDataRate() const
     return 0;
 }
 
-void TCPLink::_resetName(void)
-{
-    _name = QString("TCP Link (host:%1 port:%2)").arg(_hostAddress.toString()).arg(_port);
-    emit nameChanged(_name);
-}
-
 void TCPLink::waitForBytesWritten(int msecs)
 {
     Q_ASSERT(_socket);
@@ -306,4 +235,74 @@ void TCPLink::waitForReadyRead(int msecs)
 {
     Q_ASSERT(_socket);
     _socket->waitForReadyRead(msecs);
+}
+
+void TCPLink::_restartConnection()
+{
+    if(this->isConnected())
+    {
+        _disconnect();
+        _connect();
+    }
+}
+
+//--------------------------------------------------------------------------
+//-- TCPConfiguration
+
+TCPConfiguration::TCPConfiguration(const QString& name) : LinkConfiguration(name)
+{
+    _port    = QGC_TCP_PORT;
+    _address = QHostAddress::Any;
+}
+
+TCPConfiguration::TCPConfiguration(TCPConfiguration* source) : LinkConfiguration(source)
+{
+    _port    = source->port();
+    _address = source->address();
+}
+
+void TCPConfiguration::copyFrom(LinkConfiguration *source)
+{
+    LinkConfiguration::copyFrom(source);
+    TCPConfiguration* usource = dynamic_cast<TCPConfiguration*>(source);
+    Q_ASSERT(usource != NULL);
+    _port    = usource->port();
+    _address = usource->address();
+}
+
+void TCPConfiguration::setPort(quint16 port)
+{
+    _port = port;
+}
+
+void TCPConfiguration::setAddress(const QHostAddress& address)
+{
+    _address = address;
+}
+
+void TCPConfiguration::saveSettings(QSettings& settings, const QString& root)
+{
+    settings.beginGroup(root);
+    settings.setValue("port", (int)_port);
+    settings.setValue("host", address().toString());
+    settings.endGroup();
+}
+
+void TCPConfiguration::loadSettings(QSettings& settings, const QString& root)
+{
+    settings.beginGroup(root);
+    _port = (quint16)settings.value("port", QGC_TCP_PORT).toUInt();
+    QString address = settings.value("host", _address.toString()).toString();
+    _address = address;
+    settings.endGroup();
+}
+
+void TCPConfiguration::updateSettings()
+{
+    if(_link) {
+        TCPLink* ulink = dynamic_cast<TCPLink*>(_link);
+        if(ulink) {
+            ulink->_restartConnection();
+        }
+    }
 }

@@ -1,4 +1,3 @@
-#include <QMessageBox>
 #include <QProgressDialog>
 #include <QDebug>
 #include <QTimer>
@@ -10,6 +9,7 @@
 #include "LinkManager.h"
 #include "UAS.h"
 #include "QGC.h"
+#include "QGCMessageBox.h"
 
 QGCPX4AirframeConfig::QGCPX4AirframeConfig(QWidget *parent) :
     QWidget(parent),
@@ -110,9 +110,9 @@ QGCPX4AirframeConfig::QGCPX4AirframeConfig(QWidget *parent) :
 
     connect(UASManager::instance(), SIGNAL(activeUASSet(UASInterface*)), this, SLOT(setActiveUAS(UASInterface*)));
 
-    setActiveUAS(UASManager::instance()->getActiveUAS());
-
     uncheckAll();
+    
+    setActiveUAS(UASManager::instance()->getActiveUAS());
 }
 
 void QGCPX4AirframeConfig::parameterChanged(int uas, int component, QString parameterName, QVariant value)
@@ -148,6 +148,19 @@ void QGCPX4AirframeConfig::setActiveUAS(UASInterface* uas)
     paramMgr = mav->getParamManager();
 
     connect(mav, SIGNAL(parameterChanged(int,int,QString,QVariant)), this, SLOT(parameterChanged(int,int,QString,QVariant)));
+    
+    // If the parameters are ready, we aren't going to get paramterChanged signals. So fake them in order to make the UI work.
+    if (uas->getParamManager()->parametersReady()) {
+        QVariant value;
+        static const char* param = "SYS_AUTOSTART";
+
+        QGCUASParamManagerInterface* paramMgr = uas->getParamManager();
+        
+        QList<int> compIds = paramMgr->getComponentForParam(param);
+        Q_ASSERT(compIds.count() == 1);
+        paramMgr->getParameterValue(compIds[0], param, value);
+        parameterChanged(uas->getUASID(), compIds[0], param, value);
+    }
 }
 
 void QGCPX4AirframeConfig::uncheckAll()
@@ -238,13 +251,8 @@ void QGCPX4AirframeConfig::applyAndReboot()
     // Guard against the case of an edit where we didn't receive all params yet
     if (selectedId <= 0)
     {
-        QMessageBox msgBox;
-        msgBox.setText(tr("No airframe selected"));
-        msgBox.setInformativeText(tr("Please select an airframe first."));
-        msgBox.setStandardButtons(QMessageBox::Ok);
-        msgBox.setDefaultButton(QMessageBox::Ok);
-        (void)msgBox.exec();
-
+        QGCMessageBox::warning(tr("No airframe selected"),
+                               tr("Please select an airframe first."));
         return;
     }
 
@@ -263,25 +271,15 @@ void QGCPX4AirframeConfig::applyAndReboot()
     // Guard against the case of an edit where we didn't receive all params yet
     if (paramMgr->countPendingParams() > 0 || components.count() == 0)
     {
-        QMessageBox msgBox;
-        msgBox.setText(tr("Parameter sync with UAS not yet complete"));
-        msgBox.setInformativeText(tr("Please wait a few moments and retry"));
-        msgBox.setStandardButtons(QMessageBox::Ok);
-        msgBox.setDefaultButton(QMessageBox::Ok);
-        (void)msgBox.exec();
-
+        QGCMessageBox::information(tr("Parameter sync with UAS not yet complete"),
+                                   tr("Please wait a few moments and retry"));
         return;
     }
 
     // Guard against multiple components responding - this will never show in practice
     if (components.count() != 1) {
-        QMessageBox msgBox;
-        msgBox.setText(tr("Invalid system setup detected"));
-        msgBox.setInformativeText(tr("None or more than one component advertised to provide the main system configuration option. This is an invalid system setup - please check your autopilot."));
-        msgBox.setStandardButtons(QMessageBox::Ok);
-        msgBox.setDefaultButton(QMessageBox::Ok);
-        (void)msgBox.exec();
-
+        QGCMessageBox::warning(tr("Invalid system setup detected"),
+                               tr("None or more than one component advertised to provide the main system configuration option. This is an invalid system setup - please check your autopilot."));
         return;
     }
 

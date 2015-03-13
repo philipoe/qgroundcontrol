@@ -58,67 +58,61 @@
     <property name="title">
      <string>File</string>
     </property>
-    <addaction name="actionJoystick_Settings"/>
-    <addaction name="actionSimulate"/>
     <addaction name="separator"/>
     <addaction name="actionMuteAudioOutput"/>
+    <addaction name="actionAdd_Link"/>
     <addaction name="actionSettings"/>
-    <addaction name="actionAdvanced_Mode"/>
     <addaction name="separator"/>
     <addaction name="actionExit"/>
-   </widget>
-   <widget class="QMenu" name="menuNetwork">
-    <property name="title">
-     <string>Communication</string>
-    </property>
-    <addaction name="actionAdd_Link"/>
-    <addaction name="separator"/>
-   </widget>
-   <widget class="QMenu" name="menuTools">
-    <property name="title">
-     <string>Tool Widgets</string>
-    </property>
-    <addaction name="actionNewCustomWidget"/>
-    <addaction name="actionLoadCustomWidgetFile"/>
-    <addaction name="separator"/>
    </widget>
    <widget class="QMenu" name="menuHelp">
     <property name="title">
      <string>Help</string>
     </property>
     <addaction name="actionOnline_Documentation"/>
-    <addaction name="actionProject_Roadmap_2"/>
+    <addaction name="actionProject_Roadmap"/>
     <addaction name="actionDeveloper_Credits"/>
    </widget>
    <widget class="QMenu" name="menuPerspectives">
     <property name="title">
      <string>Perspectives</string>
     </property>
+    <addaction name="actionSetup"/>
     <addaction name="actionMissionView"/>
     <addaction name="actionFlightView"/>
-    <addaction name="actionHardwareConfig"/>
     <addaction name="actionEngineersView"/>
-    <addaction name="actionGoogleEarthView"/>
-    <addaction name="actionLocal3DView"/>
-    <addaction name="actionTerminalView"/>
-    <addaction name="actionSimulationView"/>
-    <addaction name="actionFirmwareUpdateView"/>
     <addaction name="separator"/>
     <addaction name="actionFullscreen"/>
     <addaction name="actionNormal"/>
    </widget>
+   <widget class="QMenu" name="menuAdvanced">
+    <property name="title">
+     <string>Advanced</string>
+    </property>
+    <widget class="QMenu" name="menuTools">
+     <property name="title">
+      <string>Tool Widgets</string>
+     </property>
+     <addaction name="actionNewCustomWidget"/>
+     <addaction name="actionLoadCustomWidgetFile"/>
+     <addaction name="separator"/>
+    </widget>
+    <addaction name="actionGoogleEarthView"/>
+    <addaction name="actionLocal3DView"/>
+    <addaction name="actionTerminalView"/>
+    <addaction name="actionSimulationView"/>
+    <addaction name="separator"/>
+    <addaction name="actionSimulate"/>
+    <addaction name="separator"/>
+    <addaction name="menuTools"/>
+   </widget>
    <addaction name="menuMGround"/>
-   <addaction name="menuNetwork"/>
    <addaction name="menuPerspectives"/>
-   <addaction name="menuTools"/>
+   <addaction name="menuAdvanced"/>
    <addaction name="menuHelp"/>
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
   <action name="actionExit">
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/actions/system-log-out.svg</normaloff>:/files/images/actions/system-log-out.svg</iconset>
-   </property>
    <property name="text">
     <string>Exit</string>
    </property>
@@ -173,45 +167,13 @@
    </property>
   </action>
   <action name="actionAdd_Link">
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/actions/list-add.svg</normaloff>:/files/images/actions/list-add.svg</iconset>
-   </property>
    <property name="text">
-    <string>Add Link</string>
-   </property>
-  </action>
-  <action name="actionConfiguration">
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/categories/applications-system.svg</normaloff>:/files/images/categories/applications-system.svg</iconset>
-   </property>
-   <property name="text">
-    <string>Preferences</string>
-   </property>
-   <property name="toolTip">
-    <string>Open UAS Preferences</string>
-   </property>
-  </action>
-  <action name="actionJoystickSettings">
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/devices/input-gaming.svg</normaloff>:/files/images/devices/input-gaming.svg</iconset>
-   </property>
-   <property name="text">
-    <string>Joystick Configuration</string>
-   </property>
-   <property name="visible">
-    <bool>true</bool>
+    <string>Manage Communication Links</string>
    </property>
   </action>
   <action name="actionSimulate">
    <property name="checkable">
     <bool>true</bool>
-   </property>
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/control/launch.svg</normaloff>:/files/images/control/launch.svg</iconset>
    </property>
    <property name="text">
     <string>Simulate</string>
@@ -220,50 +182,17 @@
     <string>Simulate one vehicle to test and evaluate this application</string>
    </property>
   </action>
-  <action name="actionShow_Slugs_View">
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/contrib/slugs.png</normaloff>:/files/images/contrib/slugs.png</iconset>
-   </property>
-   <property name="text">
-    <string>Show Slugs View</string>
-   </property>
-  </action>
-  <action name="actionJoystick_Settings">
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/devices/input-gaming.svg</normaloff>:/files/images/devices/input-gaming.svg</iconset>
-   </property>
-   <property name="text">
-    <string>Joystick Settings</string>
-   </property>
-   <property name="visible">
-    <bool>false</bool>
-   </property>
-  </action>
   <action name="actionOnline_Documentation">
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/apps/utilities-system-monitor.svg</normaloff>:/files/images/apps/utilities-system-monitor.svg</iconset>
-   </property>
    <property name="text">
     <string>Online Documentation</string>
    </property>
   </action>
-  <action name="actionProject_Roadmap_2">
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/status/software-update-available.svg</normaloff>:/files/images/status/software-update-available.svg</iconset>
-   </property>
+  <action name="actionProject_Roadmap">
    <property name="text">
     <string>Project Roadmap</string>
    </property>
   </action>
   <action name="actionDeveloper_Credits">
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/categories/preferences-system.svg</normaloff>:/files/images/categories/preferences-system.svg</iconset>
-   </property>
    <property name="text">
     <string>Developer Credits</string>
    </property>
@@ -272,55 +201,27 @@
    <property name="checkable">
     <bool>true</bool>
    </property>
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/categories/applications-internet.svg</normaloff>:/files/images/categories/applications-internet.svg</iconset>
-   </property>
    <property name="text">
-    <string>Mission</string>
+    <string>Plan</string>
    </property>
   </action>
   <action name="actionEngineersView">
    <property name="checkable">
     <bool>true</bool>
    </property>
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/apps/utilities-system-monitor.svg</normaloff>:/files/images/apps/utilities-system-monitor.svg</iconset>
-   </property>
    <property name="text">
-    <string>Plot</string>
-   </property>
-  </action>
-  <action name="actionMavlinkView">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/devices/network-wired.svg</normaloff>:/files/images/devices/network-wired.svg</iconset>
-   </property>
-   <property name="text">
-    <string>Mavlink</string>
+    <string>Analyze</string>
    </property>
   </action>
   <action name="actionFlightView">
    <property name="checkable">
     <bool>true</bool>
    </property>
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/status/network-wireless-encrypted.svg</normaloff>:/files/images/status/network-wireless-encrypted.svg</iconset>
-   </property>
    <property name="text">
-    <string>Instruments</string>
+    <string>Fly</string>
    </property>
   </action>
   <action name="actionNewCustomWidget">
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/apps/utilities-system-monitor.svg</normaloff>:/files/images/apps/utilities-system-monitor.svg</iconset>
-   </property>
    <property name="text">
     <string>New Custom Widget</string>
    </property>
@@ -329,28 +230,8 @@
    <property name="checkable">
     <bool>true</bool>
    </property>
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/status/audio-volume-high.svg</normaloff>
-     <normalon>:/files/images/status/audio-volume-muted.svg</normalon>
-     <activeon>:/files/images/status/audio-volume-muted.svg</activeon>
-     <selectedoff>:/files/images/status/audio-volume-high.svg</selectedoff>
-     <selectedon>:/files/images/status/audio-volume-muted.svg</selectedon>:/files/images/status/audio-volume-high.svg</iconset>
-   </property>
    <property name="text">
     <string>Mute Audio Output</string>
-   </property>
-  </action>
-  <action name="actionUnconnectedView">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/devices/network-wireless.svg</normaloff>:/files/images/devices/network-wireless.svg</iconset>
-   </property>
-   <property name="text">
-    <string>Unconnected</string>
    </property>
   </action>
   <action name="actionShutdownMAV">
@@ -374,6 +255,9 @@
    </property>
    <property name="toolTip">
     <string>Application settings</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::PreferencesRole</enum>
    </property>
   </action>
   <action name="actionFullscreen">
@@ -402,45 +286,22 @@
    </property>
   </action>
   <action name="actionLoadCustomWidgetFile">
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/status/folder-drag-accept.svg</normaloff>:/files/images/status/folder-drag-accept.svg</iconset>
-   </property>
    <property name="text">
     <string>Load Custom Widget File</string>
    </property>
   </action>
-  <action name="actionFirmwareUpdateView">
+  <action name="actionSetup">
    <property name="checkable">
     <bool>true</bool>
    </property>
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/status/software-update-available.svg</normaloff>:/files/images/status/software-update-available.svg</iconset>
-   </property>
    <property name="text">
-    <string>Firmware Update</string>
+    <string>Setup</string>
    </property>
    <property name="toolTip">
-    <string>Update the firmware of one of the connected autopilots</string>
+    <string>Setup of the vehicle</string>
    </property>
-   <property name="visible">
-    <bool>false</bool>
-   </property>
-  </action>
-  <action name="actionHardwareConfig">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/categories/preferences-system.svg</normaloff>:/files/images/categories/preferences-system.svg</iconset>
-   </property>
-   <property name="text">
-    <string>Vehicle Setup</string>
-   </property>
-   <property name="toolTip">
-    <string>Hardware setup of the vehicle</string>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
    </property>
   </action>
   <action name="actionAdvanced_Mode">
@@ -455,33 +316,13 @@
    <property name="checkable">
     <bool>true</bool>
    </property>
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/apps/accessories-calculator.svg</normaloff>:/files/images/apps/accessories-calculator.svg</iconset>
-   </property>
    <property name="text">
-    <string>Simulation</string>
-   </property>
-  </action>
-  <action name="actionSoftwareConfig">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/categories/applications-system.svg</normaloff>:/files/images/categories/applications-system.svg</iconset>
-   </property>
-   <property name="text">
-    <string>Software</string>
+    <string>HIL Simulation</string>
    </property>
   </action>
   <action name="actionTerminalView">
    <property name="checkable">
     <bool>true</bool>
-   </property>
-   <property name="icon">
-    <iconset resource="../../qgroundcontrol.qrc">
-     <normaloff>:/files/images/apps/utilities-terminal.svg</normaloff>:/files/images/apps/utilities-terminal.svg</iconset>
    </property>
    <property name="text">
     <string>Terminal</string>

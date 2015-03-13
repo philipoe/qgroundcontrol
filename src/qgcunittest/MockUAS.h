@@ -1,24 +1,24 @@
 /*=====================================================================
- 
+
  QGroundControl Open Source Ground Control Station
- 
+
  (c) 2009 - 2014 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
- 
+
  This file is part of the QGROUNDCONTROL project
- 
+
  QGROUNDCONTROL is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
  the Free Software Foundation, either version 3 of the License, or
  (at your option) any later version.
- 
+
  QGROUNDCONTROL is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  GNU General Public License for more details.
- 
+
  You should have received a copy of the GNU General Public License
  along with QGROUNDCONTROL. If not, see <http://www.gnu.org/licenses/>.
- 
+
  ======================================================================*/
 
 #ifndef MOCKUAS_H
@@ -39,49 +39,49 @@
 class MockUAS : public UASInterface
 {
     Q_OBJECT
-    
+
 signals:
     // The following UASInterface signals are supported
-    void parameterChanged(int uas, int component, QString parameterName, QVariant value);
-    void remoteControlChannelRawChanged(int channelId, float raw);
-    
+    //  void parameterChanged(int uas, int component, QString parameterName, QVariant value);
+    //  void remoteControlChannelRawChanged(int channelId, float raw);
+
 public:
     // Implemented UASInterface overrides
     virtual int getSystemType(void) { return _systemType; }
     virtual int getUASID(void) const { return _systemId; }
     virtual QGCUASParamManagerInterface* getParamManager() { return &_paramManager; };
-    
+
     // sendMessage is only supported if a mavlink plugin is installed.
     virtual void sendMessage(mavlink_message_t message);
-    
+
 public:
     // MockUAS methods
     MockUAS(void);
-    
+
     // Use these methods to setup/control the mock UAS
-    
+
     void setMockSystemType(int systemType) { _systemType = systemType; }
     void setMockSystemId(int systemId) { _systemId = systemId; }
-    
+
     /// @return returns mock QGCUASParamManager associated with the UAS. This mock implementation
     /// allows you to simulate parameter input and validate parameter setting
     MockQGCUASParamManager* getMockQGCUASParamManager(void) { return &_paramManager; }
-    
+
     /// @brief Sets the parameter map into the mock QGCUASParamManager and signals parameterChanged for
     /// each param
     void setMockParametersAndSignal(MockQGCUASParamManager::ParamMap_t& map);
-    
+
     void emitRemoteControlChannelRawChanged(int channel, float raw) { emit remoteControlChannelRawChanged(channel, raw); }
-    
+
     /// @brief Installs a mavlink plugin. Only a single mavlink plugin is supported at a time.
     void setMockMavlinkPlugin(MockMavlinkInterface* mavlinkPlugin) { _mavlinkPlugin = mavlinkPlugin; };
-    
+
 public:
     // Unimplemented UASInterface overrides
     virtual QString getUASName() const { Q_ASSERT(false); return _bogusString; };
     virtual const QString& getShortState() const { Q_ASSERT(false); return _bogusString; };
     virtual const QString& getShortMode() const { Q_ASSERT(false); return _bogusString; };
-    static QString getShortModeTextFor(int id) { Q_UNUSED(id); Q_ASSERT(false); return _bogusStaticString; };
+    virtual QString getShortModeTextFor(uint8_t base_mode, uint32_t custom_mode) const { Q_UNUSED(base_mode); Q_UNUSED(custom_mode); Q_ASSERT(false); return _bogusStaticString; };
     virtual quint64 getUptime() const { Q_ASSERT(false); return 0; };
     virtual int getCommunicationStatus() const { Q_ASSERT(false); return 0; };
     virtual double getLocalX() const { Q_ASSERT(false); return std::numeric_limits<double>::quiet_NaN(); };
@@ -100,10 +100,10 @@ public:
     virtual bool isArmed() const { Q_ASSERT(false); return false; };
     virtual int getAirframe() const { Q_ASSERT(false); return 0; };
     virtual UASWaypointManager* getWaypointManager(void) { Q_ASSERT(false); return NULL; };
-    virtual QList<LinkInterface*>* getLinks() { Q_ASSERT(false); return NULL; };
+    virtual QList<LinkInterface*> getLinks() { Q_ASSERT(false); return QList<LinkInterface*>(); };
     virtual bool systemCanReverse() const { Q_ASSERT(false); return false; };
     virtual QString getSystemTypeName() { Q_ASSERT(false); return _bogusString; };
-    virtual int getAutopilotType() { Q_ASSERT(false); return 0; };
+    virtual int getAutopilotType() { return MAV_AUTOPILOT_PX4; };
     virtual QGCUASFileManager* getFileManager() {Q_ASSERT(false); return NULL; }
 
     /** @brief Send a message over this link (to this or to all UAS on this link) */
@@ -133,7 +133,6 @@ public slots:
     virtual void setTargetPosition(float x, float y, float z, float yaw) { Q_UNUSED(x); Q_UNUSED(y); Q_UNUSED(z); Q_UNUSED(yaw); Q_ASSERT(false); };
     virtual void setLocalOriginAtCurrentGPSPosition() { Q_ASSERT(false); };
     virtual void setHomePosition(double lat, double lon, double alt) { Q_UNUSED(lat); Q_UNUSED(lon); Q_UNUSED(alt); Q_ASSERT(false); };
-    virtual void requestParameters() { Q_ASSERT(false); };
     virtual void requestParameter(int component, const QString& parameter) { Q_UNUSED(component); Q_UNUSED(parameter); Q_ASSERT(false); };
     virtual void writeParametersToStorage() { Q_ASSERT(false); };
     virtual void readParametersFromStorage() { Q_ASSERT(false); };
@@ -169,16 +168,19 @@ public slots:
     virtual void sendHilOpticalFlow(quint64 time_us, qint16 flow_x, qint16 flow_y, float flow_comp_m_x,
                             float flow_comp_m_y, quint8 quality, float ground_distance)
     { Q_UNUSED(time_us); Q_UNUSED(flow_x); Q_UNUSED(flow_y); Q_UNUSED(flow_comp_m_x); Q_UNUSED(flow_comp_m_y); Q_UNUSED(quality); Q_UNUSED(ground_distance); Q_ASSERT(false);};
-    
+    virtual void sendMapRCToParam(QString param_id, float scale, float value0, quint8 param_rc_channel_index, float valueMin, float valueMax)
+    { Q_UNUSED(param_id); Q_UNUSED(scale); Q_UNUSED(value0); Q_UNUSED(param_rc_channel_index); Q_UNUSED(valueMin); Q_UNUSED(valueMax); }
+    virtual void unsetRCToParameterMap() {}
+
     virtual bool isRotaryWing() { Q_ASSERT(false); return false; }
     virtual bool isFixedWing() { Q_ASSERT(false); return false; }
 
 private:
     int                 _systemType;
     int                 _systemId;
-    
+
     MockQGCUASParamManager _paramManager;
-    
+
     MockMavlinkInterface* _mavlinkPlugin;   ///< Mock Mavlink plugin, NULL for none
 
     // Bogus variables used for return types of NYI methods

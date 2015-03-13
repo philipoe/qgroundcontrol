@@ -36,14 +36,12 @@ MacBuild {
 # in the target.
 WindowsBuild {
     # Make sure to keep both side of this if using the same set of directories
-	DESTDIR_COPY_RESOURCE_LIST = $$replace(DESTDIR,"/","\\")
-	BASEDIR_COPY_RESOURCE_LIST = $$replace(BASEDIR,"/","\\")
+    DESTDIR_COPY_RESOURCE_LIST = $$replace(DESTDIR,"/","\\")
+    BASEDIR_COPY_RESOURCE_LIST = $$replace(BASEDIR,"/","\\")
     QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY_DIR \"$$BASEDIR_COPY_RESOURCE_LIST\\files\" \"$$DESTDIR_COPY_RESOURCE_LIST\\files\"
-    QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY_DIR \"$$BASEDIR_COPY_RESOURCE_LIST\\data\" \"$$DESTDIR_COPY_RESOURCE_LIST\\data\"
 } else {
     # Make sure to keep both side of this if using the same set of directories
     QMAKE_POST_LINK += && $$QMAKE_COPY_DIR $$BASEDIR/files $$DESTDIR_COPY_RESOURCE_LIST
-    QMAKE_POST_LINK += && $$QMAKE_COPY_DIR $$BASEDIR/data $$DESTDIR_COPY_RESOURCE_LIST
 }
 
 #
@@ -53,7 +51,7 @@ WindowsBuild {
 MacBuild {
 	# Copy non-standard libraries and frameworks into app package
     QMAKE_POST_LINK += && $$QMAKE_COPY_DIR $$BASEDIR/libs/lib/mac64/lib $$DESTDIR/$${TARGET}.app/Contents/libs
-    QMAKE_POST_LINK += && $$QMAKE_COPY_DIR -L $$BASEDIR/libs/lib/Frameworks $$DESTDIR/$${TARGET}.app/Contents/Frameworks
+    QMAKE_POST_LINK += && $$QMAKE_COPY_DIR -L $$BASEDIR/libs/lib/Frameworks $$DESTDIR/$${TARGET}.app/Contents
 
 	# Fix library paths inside executable
 
@@ -175,6 +173,7 @@ WindowsBuild {
         $$DLL_DIR\\Qt5PrintSupport$${DLL_QT_DEBUGCHAR}.dll \
         $$DLL_DIR\\Qt5Qml$${DLL_QT_DEBUGCHAR}.dll \
         $$DLL_DIR\\Qt5Quick$${DLL_QT_DEBUGCHAR}.dll \
+        $$DLL_DIR\\Qt5QuickWidgets$${DLL_QT_DEBUGCHAR}.dll \
         $$DLL_DIR\\Qt5Sensors$${DLL_QT_DEBUGCHAR}.dll \
         $$DLL_DIR\\Qt5SerialPort$${DLL_QT_DEBUGCHAR}.dll \
         $$DLL_DIR\\Qt5OpenGL$${DLL_QT_DEBUGCHAR}.dll \
@@ -196,8 +195,19 @@ WindowsBuild {
 	QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY \"$$PLUGINS_DIR_WIN\\platforms\\qwindows$${DLL_QT_DEBUGCHAR}.dll\" \"$$DESTDIR_WIN\\platforms\\qwindows$${DLL_QT_DEBUGCHAR}.dll\"
 	QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY_DIR \"$$PLUGINS_DIR_WIN\\imageformats\" \"$$DESTDIR_WIN\\imageformats\"
     QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY_DIR \"$$PLUGINS_DIR_WIN\\sqldrivers\" \"$$DESTDIR_WIN\\sqldrivers\"
+    QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY_DIR \"$$PLUGINS_DIR_WIN\\bearer\" \"$$DESTDIR_WIN\\bearer\"
+    QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY_DIR \"$$PLUGINS_DIR_WIN\\iconengines\" \"$$DESTDIR_WIN\\iconengines\"
+    QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY_DIR \"$$PLUGINS_DIR_WIN\\printsupport\" \"$$DESTDIR_WIN\\printsupport\"
+    QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY_DIR \"$$PLUGINS_DIR_WIN\\qmltooling\" \"$$DESTDIR_WIN\\qmltooling\"
 
-	ReleaseBuild {
+    # Copy Qml libraries
+    Q_DIR = $$[QT_INSTALL_QML]
+    QML_DIR_WIN = $$replace(Q_DIR, "/", "\\")
+    QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY_DIR \"$$QML_DIR_WIN\\QtGraphicalEffects\" \"$$DESTDIR_WIN\\QtGraphicalEffects\"
+    QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY_DIR \"$$QML_DIR_WIN\\QtQuick\" \"$$DESTDIR_WIN\\QtQuick\"
+    QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY_DIR \"$$QML_DIR_WIN\\QtQuick.2\" \"$$DESTDIR_WIN\\QtQuick.2\"
+
+        ReleaseBuild {
 		# Copy Visual Studio DLLs
 		# Note that this is only done for release because the debugging versions of these DLLs cannot be redistributed.
 		win32-msvc2010 {

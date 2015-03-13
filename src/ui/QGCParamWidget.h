@@ -32,10 +32,10 @@ This file is part of the QGROUNDCONTROL project
 
 #include <QWidget>
 #include <QTreeWidget>
-#include <QTreeWidgetItem>
 #include <QMap>
 #include <QLabel>
 #include <QTimer>
+#include "QGCParamTreeWidget.h"
 
 #include "QGCBaseParamWidget.h"
 
@@ -53,6 +53,11 @@ class QGCParamWidget : public QGCBaseParamWidget
 public:
     QGCParamWidget(QWidget *parent = 0);
 
+    /// @brief Sets the list of parameters which should be shown by this editor. Parameter names can be
+    ///         wildcarded at the end such as this: "RC*". Which will filter to all parameters which begin
+    ///         with "RC". The wildcard (*) can only be at the end of the string.
+    void setFilterList(const QStringList& filterList) { _filterList = filterList; }
+
 protected:
     virtual void setParameterStatusMsg(const QString& msg);
     virtual void layoutWidget();///< Layout the appearance of this widget
@@ -69,10 +74,6 @@ protected:
     void addComponentItem(int compId, QString compName);
 
     virtual void addActionButtonsToLayout(QGridLayout* layout);
-
-
-signals:
-
 
 public slots:
     virtual void handleOnboardParamUpdate(int component,const QString& parameterName, QVariant value);
@@ -92,13 +93,20 @@ public slots:
     /** @brief Update when user changes parameters */
     void parameterItemChanged(QTreeWidgetItem* prev, int column);
 
+    /** Promt configuration for param map config from user */
+    void configureRCToParam(QString param_id);
+
+
 
 protected:
     QMap<int, QTreeWidgetItem*>* componentItems; ///< The tree of component items, stored by component ID
     QMap<int, QMap<QString, QTreeWidgetItem*>* > paramGroups; ///< Parameter groups to organize component items
     QLabel* statusLabel; ///< User-facing parameter status label
-    QTreeWidget* tree;   ///< The parameter tree
+    QGCParamTreeWidget* tree;   ///< The parameter tree
+    QStringList _filterList;
 
+private:
+    bool _fullParamListLoaded;
 };
 
 #endif // QGCPARAMWIDGET_H

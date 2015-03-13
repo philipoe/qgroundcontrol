@@ -2,7 +2,7 @@
 
 PIXHAWK Micro Air Vehicle Flying Robotics Toolkit
 
-(c) 2009, 2010 PIXHAWK PROJECT  <http://pixhawk.ethz.ch>
+(c) 2009, 2015 PIXHAWK PROJECT  <http://pixhawk.ethz.ch>
 
 This file is part of the PIXHAWK project
 
@@ -21,86 +21,148 @@ This file is part of the PIXHAWK project
 
 ======================================================================*/
 
-/**
- * @file
- *   @brief Manage communication links
- *
- *   @author Lorenz Meier <mavteam@student.ethz.ch>
- *
- */
+/// @file
+///     @author Lorenz Meier <mavteam@student.ethz.ch>
 
 #ifndef _LINKMANAGER_H_
 #define _LINKMANAGER_H_
 
-#include <QThread>
 #include <QList>
 #include <QMultiMap>
 #include <QMutex>
-#include <LinkInterface.h>
-#include <SerialLink.h>
-#include <ProtocolInterface.h>
 
-/**
- * The Link Manager organizes the physical Links. It can manage arbitrary
- * links and takes care of connecting them as well assigning the correct
- * protocol instance to transport the link data into the application.
- *
- **/
-class LinkManager : public QObject
+#include "LinkConfiguration.h"
+#include "LinkInterface.h"
+
+// Links
+#include "SerialLink.h"
+#include "UDPLink.h"
+#include "TCPLink.h"
+
+#ifdef UNITTEST_BUILD
+#include "MockLink.h"
+#endif
+
+#include "ProtocolInterface.h"
+#include "QGCSingleton.h"
+#include "MAVLinkProtocol.h"
+
+class LinkManagerTest;
+
+/// Manage communication links
+///
+/// The Link Manager organizes the physical Links. It can manage arbitrary
+/// links and takes care of connecting them as well assigning the correct
+/// protocol instance to transport the link data into the application.
+
+class LinkManager : public QGCSingleton
 {
     Q_OBJECT
+    DECLARE_QGC_SINGLETON(LinkManager, LinkManager)
+
+    /// Unit Test has access to private constructor/destructor
+    friend class LinkManagerTest;
 
 public:
-    static LinkManager* instance();
-    ~LinkManager();
 
-    void run();
 
-    QList<LinkInterface*> getLinksForProtocol(ProtocolInterface* protocol);
+    /*!
+      Add a new link configuration setting to the list
+      @param[in] link An instance of the link setting.
+    */
+    void addLinkConfiguration(LinkConfiguration* link);
 
-    ProtocolInterface* getProtocolForLink(LinkInterface* link);
+    /*!
+      Removes (and deletes) an existing link configuration setting from the list
+      @param[in] link An instance of the link setting.
+    */
+    void removeLinkConfiguration(LinkConfiguration* link);
 
-    /** @brief Get the link for this id */
-    LinkInterface* getLinkForId(int id);
+    /// Load list of link configurations from disk
+    void loadLinkConfigurationList();
 
-    /** @brief Get a list of all links */
+    /// Save list of link configurations from disk
+    void saveLinkConfigurationList();
+
+    /// Get a list of the configured links. This is the list of configured links that can be used by QGC.
+    const QList<LinkConfiguration*> getLinkConfigurationList();
+
+    /// Suspend automatic confguration updates (during link maintenance for instance)
+    void suspendConfigurationUpdates(bool suspend);
+
+    /// Returns list of all links
     const QList<LinkInterface*> getLinks();
 
-    /** @brief Get a list of all serial links */
+    // Returns list of all serial links
     const QList<SerialLink*> getSerialLinks();
 
-    /** @brief Get a list of all protocols */
-    const QList<ProtocolInterface*> getProtocols() {
-        return protocolLinks.uniqueKeys();
-    }
+    /// Sets the flag to suspend the all new connections
+    ///     @param reason User visible reason to suspend connections
+    void setConnectionsSuspended(QString reason);
 
-public slots:
+    /// Sets the flag to allow new connections to be made
+    void setConnectionsAllowed(void) { _connectionsSuspended = false; }
 
-    void add(LinkInterface* link);
-    void addProtocol(LinkInterface* link, ProtocolInterface* protocol);
+    /// Creates (and adds) a link  based on the given configuration instance. LinkManager takes ownership of this object. To delete
+    /// it, call LinkManager::deleteLink.
+    LinkInterface* createLink(LinkConfiguration* config);
 
-    void removeObj(QObject* obj);
-    bool removeLink(LinkInterface* link);
+    /// Creates (and adds) a link  based on the given configuration name. LinkManager takes ownership of this object. To delete
+    /// it, call LinkManager::deleteLink.
+    LinkInterface* createLink(const QString& name);
 
+    /// Adds the link to the LinkManager. LinkManager takes ownership of this object. To delete
+    /// it, call LinkManager::deleteLink.
+    void addLink(LinkInterface* link);
+
+    /// Deletes the specified link. Will disconnect if connected.
+    // TODO Will also crash if called. MAVLink protocol is not handling the disconnect properly.
+    void deleteLink(LinkInterface* link);
+
+    /// Re-connects all existing links
     bool connectAll();
+
+    /// Disconnects all existing links
+    bool disconnectAll();
+
+    /// Connect the specified link
     bool connectLink(LinkInterface* link);
 
-    bool disconnectAll();
+    /// Disconnect the specified link
     bool disconnectLink(LinkInterface* link);
-
-protected:
-    LinkManager();
-    QList<LinkInterface*> links;
-    QMultiMap<ProtocolInterface*,LinkInterface*> protocolLinks;
-    QMutex dataMutex;
-
-private:
-    static LinkManager* _instance;
 
 signals:
     void newLink(LinkInterface* link);
-    void linkRemoved(LinkInterface* link);
+    void linkDeleted(LinkInterface* link);
+    void linkConnected(LinkInterface* link);
+    void linkDisconnected(LinkInterface* link);
+    void linkConfigurationChanged();
 
+private slots:
+    void _linkConnected(void);
+    void _linkDisconnected(void);
+    void _delayedDeleteLink();
+
+private:
+    /// All access to LinkManager is through LinkManager::instance
+    LinkManager(QObject* parent = NULL);
+    ~LinkManager();
+
+    virtual void _shutdown(void);
+
+    bool _connectionsSuspendedMsg(void);
+    void _updateConfigurationList(void);
+    SerialConfiguration* _findSerialConfiguration(const QString& portName);
+
+    QList<LinkConfiguration*>   _linkConfigurations;    ///< List of configured links
+    QList<LinkInterface*>       _links;                 ///< List of available links
+    QMutex                      _linkListMutex;         ///< Mutex for thread safe access to _links list
+
+    bool    _configUpdateSuspended;                     ///< true: stop updating configuration list
+    bool    _configurationsLoaded;                      ///< true: Link configurations have been loaded
+    bool    _connectionsSuspended;                      ///< true: all new connections should not be allowed
+    QString _connectionsSuspendedReason;                ///< User visible reason for suspension
+    QTimer  _portListTimer;
 };
 
-#endif // _LINKMANAGER_H_
+#endif

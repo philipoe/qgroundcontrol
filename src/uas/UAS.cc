@@ -10,13 +10,14 @@
  */
 
 #include <QList>
-#include <QMessageBox>
 #include <QTimer>
 #include <QSettings>
 #include <iostream>
 #include <QDebug>
+
 #include <cmath>
 #include <qmath.h>
+
 #include "UAS.h"
 #include "LinkInterface.h"
 #include "UASManager.h"
@@ -28,7 +29,12 @@
 #include "SerialLink.h"
 #include "UASParameterCommsMgr.h"
 #include <Eigen/Geometry>
-#include <comm/px4_custom_mode.h>
+#include "AutoPilotPluginManager.h"
+#include "QGCMessageBox.h"
+
+Q_LOGGING_CATEGORY(UASLog, "UASLog")
+
+#define UAS_DEFAULT_BATTERY_WARNLEVEL 20
 
 /**
 * Gets the settings from the previous UAS (name, airframe, autopilot, battery specs)
@@ -37,17 +43,15 @@
 * creating the UAS.
 */
 
-UAS::UAS(MAVLinkProtocol* protocol, QThread* thread, int id) : UASInterface(),
+UAS::UAS(MAVLinkProtocol* protocol, int id) : UASInterface(),
     lipoFull(4.2f),
     lipoEmpty(3.5f),
     uasId(id),
-    links(new QList<LinkInterface*>()),
     unknownPackets(),
     mavlink(protocol),
     commStatus(COMM_DISCONNECTED),
     receiveDropRate(0),
     sendDropRate(0),
-    statusTimeout(thread),
 
     name(""),
     type(MAV_TYPE_GENERIC),
@@ -68,20 +72,14 @@ UAS::UAS(MAVLinkProtocol* protocol, QThread* thread, int id) : UASInterface(),
     thrustSum(0),
     thrustMax(10),
 
-    // batteryType not initialized
-    // cells not initialized
-    // fullVoltage not initialized
-    // emptyVoltage not initialized
     startVoltage(-1.0f),
     tickVoltage(10.5f),
     lastTickVoltageValue(13.0f),
     tickLowpassVoltage(12.0f),
-    warnVoltage(9.5f),
-    warnLevelPercent(20.0f),
+    warnLevelPercent(UAS_DEFAULT_BATTERY_WARNLEVEL),
     currentVoltage(12.6f),
     lpVoltage(12.0f),
     currentCurrent(0.4f),
-    batteryRemainingEstimateEnabled(false),
     chargeLevel(-1),
     timeRemaining(0),
     lowBattAlarm(false),
@@ -148,7 +146,6 @@ UAS::UAS(MAVLinkProtocol* protocol, QThread* thread, int id) : UASInterface(),
     paramsOnceRequested(false),
     paramMgr(this),
     simulation(0),
-    _thread(thread),
 
     // The protected members.
     connectionLost(false),
@@ -161,7 +158,6 @@ UAS::UAS(MAVLinkProtocol* protocol, QThread* thread, int id) : UASInterface(),
     lastSendTimeSensors(0),
     lastSendTimeOpticalFlow(0)
 {
-    moveToThread(thread);
 
     for (unsigned int i = 0; i<255;++i)
     {
@@ -174,63 +170,62 @@ UAS::UAS(MAVLinkProtocol* protocol, QThread* thread, int id) : UASInterface(),
     // Store a list of available actions for this UAS.
     // Basically everything exposed as a SLOT with no return value or arguments.
 
-    QAction* newAction = new QAction(tr("Arm"), thread);
+    QAction* newAction = new QAction(tr("Arm"), this);
     newAction->setToolTip(tr("Enable the UAS so that all actuators are online"));
     connect(newAction, SIGNAL(triggered()), this, SLOT(armSystem()));
     actions.append(newAction);
 
-    newAction = new QAction(tr("Disarm"), thread);
+    newAction = new QAction(tr("Disarm"), this);
     newAction->setToolTip(tr("Disable the UAS so that all actuators are offline"));
     connect(newAction, SIGNAL(triggered()), this, SLOT(disarmSystem()));
     actions.append(newAction);
 
-    newAction = new QAction(tr("Toggle armed"), thread);
+    newAction = new QAction(tr("Toggle armed"), this);
     newAction->setToolTip(tr("Toggle between armed and disarmed"));
     connect(newAction, SIGNAL(triggered()), this, SLOT(toggleAutonomy()));
     actions.append(newAction);
 
-    newAction = new QAction(tr("Go home"), thread);
+    newAction = new QAction(tr("Go home"), this);
     newAction->setToolTip(tr("Command the UAS to return to its home position"));
     connect(newAction, SIGNAL(triggered()), this, SLOT(home()));
     actions.append(newAction);
 
-    newAction = new QAction(tr("Land"), thread);
+    newAction = new QAction(tr("Land"), this);
     newAction->setToolTip(tr("Command the UAS to land"));
     connect(newAction, SIGNAL(triggered()), this, SLOT(land()));
     actions.append(newAction);
 
-    newAction = new QAction(tr("Launch"), thread);
+    newAction = new QAction(tr("Launch"), this);
     newAction->setToolTip(tr("Command the UAS to launch itself and begin its mission"));
     connect(newAction, SIGNAL(triggered()), this, SLOT(launch()));
     actions.append(newAction);
 
-    newAction = new QAction(tr("Resume"), thread);
+    newAction = new QAction(tr("Resume"), this);
     newAction->setToolTip(tr("Command the UAS to continue its mission"));
     connect(newAction, SIGNAL(triggered()), this, SLOT(go()));
     actions.append(newAction);
 
-    newAction = new QAction(tr("Stop"), thread);
+    newAction = new QAction(tr("Stop"), this);
     newAction->setToolTip(tr("Command the UAS to halt and hold position"));
     connect(newAction, SIGNAL(triggered()), this, SLOT(halt()));
     actions.append(newAction);
 
-    newAction = new QAction(tr("Go autonomous"), thread);
+    newAction = new QAction(tr("Go autonomous"), this);
     newAction->setToolTip(tr("Set the UAS into an autonomous control mode"));
     connect(newAction, SIGNAL(triggered()), this, SLOT(goAutonomous()));
     actions.append(newAction);
 
-    newAction = new QAction(tr("Go manual"), thread);
+    newAction = new QAction(tr("Go manual"), this);
     newAction->setToolTip(tr("Set the UAS into a manual control mode"));
     connect(newAction, SIGNAL(triggered()), this, SLOT(goManual()));
     actions.append(newAction);
 
-    newAction = new QAction(tr("Toggle autonomy"), thread);
+    newAction = new QAction(tr("Toggle autonomy"), this);
     newAction->setToolTip(tr("Toggle between manual and full-autonomy"));
     connect(newAction, SIGNAL(triggered()), this, SLOT(toggleAutonomy()));
     actions.append(newAction);
 
     color = UASInterface::getNextColor();
-    setBatterySpecs(QString(""));
     connect(&statusTimeout, SIGNAL(timeout()), this, SLOT(updateState()));
     connect(this, SIGNAL(systemSpecsChanged(int)), this, SLOT(writeSettings()));
     statusTimeout.start(500);
@@ -249,12 +244,6 @@ UAS::UAS(MAVLinkProtocol* protocol, QThread* thread, int id) : UASInterface(),
 UAS::~UAS()
 {
     writeSettings();
-
-    _thread->quit();
-    _thread->wait();
-
-    delete links;
-    delete simulation;
 }
 
 /**
@@ -270,7 +259,6 @@ void UAS::writeSettings()
     settings.setValue("AP_TYPE", this->autopilot);
     settings.setValue("BATTERY_SPECS", getBatterySpecs());
     settings.endGroup();
-    settings.sync();
 }
 
 /**
@@ -301,7 +289,7 @@ void UAS::deleteSettings()
     this->name = "";
     this->airframe = QGC_AIRFRAME_GENERIC;
     this->autopilot = -1;
-    setBatterySpecs(QString("9V,9.5V,12.6V"));
+    warnLevelPercent = UAS_DEFAULT_BATTERY_WARNLEVEL;
 }
 
 /**
@@ -333,7 +321,7 @@ void UAS::updateState()
         connectionLost = true;
         receivedMode = false;
         QString audiostring = QString("Link lost to system %1").arg(this->getUASID());
-        GAudioOutput::instance()->say(audiostring.toLower());
+        GAudioOutput::instance()->say(audiostring.toLower(), GAudioOutput::AUDIO_SEVERITY_ALERT);
     }
 
     // Update connection loss time on each iteration
@@ -347,7 +335,7 @@ void UAS::updateState()
     if (connectionLost && (heartbeatInterval < timeoutIntervalHeartbeat))
     {
         QString audiostring = QString("Link regained to system %1").arg(this->getUASID());
-        GAudioOutput::instance()->say(audiostring.toLower());
+        GAudioOutput::instance()->say(audiostring.toLower(), GAudioOutput::AUDIO_SEVERITY_NOTICE);
         connectionLost = false;
         connectionLossTime = 0;
         emit heartbeatTimeout(false, 0);
@@ -391,8 +379,7 @@ bool UAS::getSelected() const
 
 void UAS::receiveMessage(LinkInterface* link, mavlink_message_t message)
 {
-    if (!link) return;
-    if (!links->contains(link))
+    if (!links.contains(link))
     {
         addLink(link);
         //        qDebug() << __FILE__ << __LINE__ << "ADDED LINK!" << link->getName();
@@ -550,7 +537,7 @@ void UAS::receiveMessage(LinkInterface* link, mavlink_message_t message)
                 modechanged = true;
                 this->base_mode = state.base_mode;
                 this->custom_mode = state.custom_mode;
-                shortModeText = getShortModeTextFor(this->base_mode, this->custom_mode, this->autopilot);
+                shortModeText = getShortModeTextFor(this->base_mode, this->custom_mode);
 
                 emit modeChanged(this->getUASID(), shortModeText, "");
 
@@ -574,7 +561,7 @@ void UAS::receiveMessage(LinkInterface* link, mavlink_message_t message)
 
             if (statechanged && ((int)state.system_status == (int)MAV_STATE_CRITICAL || state.system_status == (int)MAV_STATE_EMERGENCY))
             {
-                GAudioOutput::instance()->say(QString("emergency for system %1").arg(this->getUASID()));
+                GAudioOutput::instance()->say(QString("Emergency for system %1").arg(this->getUASID()), GAudioOutput::AUDIO_SEVERITY_EMERGENCY);
                 QTimer::singleShot(3000, GAudioOutput::instance(), SLOT(startEmergency()));
             }
             else if (modechanged || statechanged)
@@ -630,17 +617,14 @@ void UAS::receiveMessage(LinkInterface* link, mavlink_message_t message)
                     /* warn only every 12 seconds */
                     && (QGC::groundTimeUsecs() - lastVoltageWarning) > 12000000)
             {
-                GAudioOutput::instance()->say(QString("voltage warning: %1 volts").arg(lpVoltage, 0, 'f', 1, QChar(' ')));
+                GAudioOutput::instance()->say(QString("Voltage warning for system %1: %2 volts").arg(getUASID()).arg(lpVoltage, 0, 'f', 1, QChar(' ')));
                 lastVoltageWarning = QGC::groundTimeUsecs();
                 lastTickVoltageValue = tickLowpassVoltage;
             }
 
             if (startVoltage == -1.0f && currentVoltage > 0.1f) startVoltage = currentVoltage;
             timeRemaining = calculateTimeRemaining();
-            if (!batteryRemainingEstimateEnabled && chargeLevel != -1)
-            {
-                chargeLevel = state.battery_remaining;
-            }
+            chargeLevel = state.battery_remaining;
 
             emit batteryChanged(this, lpVoltage, currentCurrent, getChargeLevel(), timeRemaining);
             emit valueChanged(uasId, name.arg("battery_remaining"), "%", getChargeLevel(), time);
@@ -655,7 +639,7 @@ void UAS::receiveMessage(LinkInterface* link, mavlink_message_t message)
             }
 
             // LOW BATTERY ALARM
-            if (lpVoltage < warnVoltage && (currentVoltage - 0.2f) < warnVoltage && (currentVoltage > 3.3))
+            if (chargeLevel >= 0 && (getChargeLevel() < warnLevelPercent))
             {
                 // An audio alarm. Does not generate any signals.
                 startLowBattAlarm();
@@ -1225,7 +1209,7 @@ void UAS::receiveMessage(LinkInterface* link, mavlink_message_t message)
             mavlink_mission_item_reached_t wpr;
             mavlink_msg_mission_item_reached_decode(&message, &wpr);
             waypointManager.handleWaypointReached(message.sysid, message.compid, &wpr);
-            QString text = QString("System %1 reached waypoint %2").arg(getUASName()).arg(wpr.seq);
+            QString text = QString("System %1 reached waypoint %2").arg(getUASID()).arg(wpr.seq);
             GAudioOutput::instance()->say(text);
             emit textMessageReceived(message.sysid, message.compid, MAV_SEVERITY_INFO, text);
         }
@@ -1404,19 +1388,11 @@ void UAS::setHomePosition(double lat, double lon, double alt)
                 tr("UAS") + QString::number(getUASID())
               : getUASName();
 
-    QMessageBox msgBox;
-    msgBox.setIcon(QMessageBox::Warning);
-    msgBox.setText(tr("Set a new home position for vehicle %1").arg(uasName));
-    msgBox.setInformativeText("Do you want to set a new origin? Waypoints defined in the local frame will be shifted in their physical location");
-    msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::Cancel);
-    msgBox.setDefaultButton(QMessageBox::Cancel);
-    int ret = msgBox.exec();
-
-    // Close the message box shortly after the click to prevent accidental clicks
-    QTimer::singleShot(5000, &msgBox, SLOT(reject()));
-
-
-    if (ret == QMessageBox::Yes)
+    QMessageBox::StandardButton button = QGCMessageBox::question(tr("Set a new home position for vehicle %1").arg(uasName),
+                                                                 tr("Do you want to set a new origin? Waypoints defined in the local frame will be shifted in their physical location"),
+                                                                 QMessageBox::Yes | QMessageBox::Cancel,
+                                                                 QMessageBox::Cancel);
+    if (button == QMessageBox::Yes)
     {
         mavlink_message_t msg;
         mavlink_msg_command_long_pack(mavlink->getSystemId(), mavlink->getComponentId(), &msg, this->getUASID(), 0, MAV_CMD_DO_SET_HOME, 1, 0, 0, 0, 0, lat, lon, alt);
@@ -1442,19 +1418,11 @@ void UAS::setHomePosition(double lat, double lon, double alt)
 **/
 void UAS::setLocalOriginAtCurrentGPSPosition()
 {
-    QMessageBox msgBox;
-    msgBox.setIcon(QMessageBox::Warning);
-    msgBox.setText("Set the home position at the current GPS position?");
-    msgBox.setInformativeText("Do you want to set a new origin? Waypoints defined in the local frame will be shifted in their physical location");
-    msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::Cancel);
-    msgBox.setDefaultButton(QMessageBox::Cancel);
-    int ret = msgBox.exec();
-
-    // Close the message box shortly after the click to prevent accidental clicks
-    QTimer::singleShot(5000, &msgBox, SLOT(reject()));
-
-
-    if (ret == QMessageBox::Yes)
+    QMessageBox::StandardButton button = QGCMessageBox::question(tr("Set the home position at the current GPS position?"),
+                                                                 tr("Do you want to set a new origin? Waypoints defined in the local frame will be shifted in their physical location"),
+                                                                 QMessageBox::Yes | QMessageBox::Cancel,
+                                                                 QMessageBox::Cancel);
+    if (button == QMessageBox::Yes)
     {
         mavlink_message_t msg;
         mavlink_msg_command_long_pack(mavlink->getSystemId(), mavlink->getComponentId(), &msg, this->getUASID(), 0, MAV_CMD_DO_SET_HOME, 1, 1, 0, 0, 0, 0, 0, 0);
@@ -1754,22 +1722,14 @@ void UAS::sendMessage(mavlink_message_t message)
         return;
     }
 
-    if (links->count() < 1) {
+    if (links.count() < 1) {
         qDebug() << "NO LINK AVAILABLE TO SEND!";
     }
 
     // Emit message on all links that are currently connected
-    foreach (LinkInterface* link, *links)
-    {
-        if (LinkManager::instance()->getLinks().contains(link))
-        {
-            if (link->isConnected())
-                sendMessage(link, message);
-        }
-        else
-        {
-            // Remove from list
-            links->removeAt(links->indexOf(link));
+    foreach (LinkInterface* link, links) {
+        if (link->isConnected()) {
+            sendMessage(link, message);
         }
     }
 }
@@ -1781,7 +1741,7 @@ void UAS::sendMessage(mavlink_message_t message)
 void UAS::forwardMessage(mavlink_message_t message)
 {
     // Emit message on all links that are currently connected
-    QList<LinkInterface*>link_list = LinkManager::instance()->getLinksForProtocol(mavlink);
+    QList<LinkInterface*>link_list = LinkManager::instance()->getLinks();
 
     foreach(LinkInterface* link, link_list)
     {
@@ -1790,9 +1750,9 @@ void UAS::forwardMessage(mavlink_message_t message)
             SerialLink* serial = dynamic_cast<SerialLink*>(link);
             if(serial != 0)
             {
-                for(int i=0; i<links->size(); i++)
+                for(int i=0; i<links.size(); i++)
                 {
-                    if(serial != links->at(i))
+                    if(serial != links.at(i))
                     {
                         if (link->isConnected()) {
                             qDebug()<<"Antenna tracking: Forwarding Over link: "<<serial->getName()<<" "<<serial;
@@ -1982,16 +1942,6 @@ quint64 UAS::getUptime() const
 int UAS::getCommunicationStatus() const
 {
     return commStatus;
-}
-
-void UAS::requestParameters()
-{
-    mavlink_message_t msg;
-    mavlink_msg_param_request_list_pack(mavlink->getSystemId(), mavlink->getComponentId(), &msg, this->getUASID(), MAV_COMP_ID_ALL);
-    sendMessage(msg);
-
-    QDateTime time = QDateTime::currentDateTime();
-    qDebug() << __FILE__ << ":" << __LINE__ << time.toString() << "LOADING PARAM LIST";
 }
 
 void UAS::writeParametersToStorage()
@@ -2381,7 +2331,7 @@ void UAS::setParameter(const int compId, const QString& paramId, const QVariant&
 
 
 //TODO update this to use the parameter manager / param data model instead
-void UAS::processParamValueMsg(mavlink_message_t& msg, const QString& paramName, const mavlink_param_value_t& rawValue,  mavlink_param_union_t& paramValue)
+void UAS::processParamValueMsg(mavlink_message_t& msg, const QString& paramName, const mavlink_param_value_t& rawValue,  mavlink_param_union_t& paramUnion)
 {
     int compId = msg.compid;
 
@@ -2395,105 +2345,69 @@ void UAS::processParamValueMsg(mavlink_message_t& msg, const QString& paramName,
         parameters.value(compId)->remove(paramName);
     }
 
-    QVariant param;
+    QVariant paramValue;
 
     // Insert with correct type
     // TODO: This is a hack for MAV_AUTOPILOT_ARDUPILOTMEGA until the new version of MAVLink and a fix for their param handling.
-    switch (rawValue.param_type)
-    {
-    case MAV_PARAM_TYPE_REAL32:
-    {
-        if (getAutopilotType() == MAV_AUTOPILOT_ARDUPILOTMEGA) {
-            param = QVariant(paramValue.param_float);
-        }
-        else {
-            param = QVariant(paramValue.param_float);
-        }
-        parameters.value(compId)->insert(paramName, param);
-        // Emit change
-        emit parameterChanged(uasId, compId, paramName, param);
-        emit parameterChanged(uasId, compId, rawValue.param_count, rawValue.param_index, paramName, param);
-//                qDebug() << "RECEIVED PARAM:" << param;
-    }
-        break;
-    case MAV_PARAM_TYPE_UINT8:
-    {
-        if (getAutopilotType() == MAV_AUTOPILOT_ARDUPILOTMEGA) {
-            param = QVariant(QChar((unsigned char)paramValue.param_float));
-        }
-        else {
-            param = QVariant(QChar((unsigned char)paramValue.param_uint8));
-        }
-        parameters.value(compId)->insert(paramName, param);
-        // Emit change
-        emit parameterChanged(uasId, compId, paramName, param);
-        emit parameterChanged(uasId, compId, rawValue.param_count, rawValue.param_index, paramName, param);
-        //qDebug() << "RECEIVED PARAM:" << param;
-    }
-        break;
-    case MAV_PARAM_TYPE_INT8:
-    {
-        if (getAutopilotType() == MAV_AUTOPILOT_ARDUPILOTMEGA) {
-            param = QVariant(QChar((char)paramValue.param_float));
-        }
-        else  {
-            param = QVariant(QChar((char)paramValue.param_int8));
-        }
-        parameters.value(compId)->insert(paramName, param);
-        // Emit change
-        emit parameterChanged(uasId, compId, paramName, param);
-        emit parameterChanged(uasId, compId, rawValue.param_count, rawValue.param_index, paramName, param);
-        //qDebug() << "RECEIVED PARAM:" << param;
-    }
-        break;
-    case MAV_PARAM_TYPE_INT16:
-    {
-        if (getAutopilotType() == MAV_AUTOPILOT_ARDUPILOTMEGA) {
-            param = QVariant((short)paramValue.param_float);
-        }
-        else {
-            param = QVariant(paramValue.param_int16);
-        }
-        parameters.value(compId)->insert(paramName, param);
-        // Emit change
-        emit parameterChanged(uasId, compId, paramName, param);
-        emit parameterChanged(uasId, compId, rawValue.param_count, rawValue.param_index, paramName, param);
-        //qDebug() << "RECEIVED PARAM:" << param;
-    }
-        break;
-    case MAV_PARAM_TYPE_UINT32:
-    {
-        if (getAutopilotType() == MAV_AUTOPILOT_ARDUPILOTMEGA) {
-            param = QVariant((unsigned int)paramValue.param_float);
-        }
-        else {
-            param = QVariant(paramValue.param_uint32);
-        }
-        parameters.value(compId)->insert(paramName, param);
-        // Emit change
-        emit parameterChanged(uasId, compId, paramName, param);
-        emit parameterChanged(uasId, compId, rawValue.param_count, rawValue.param_index, paramName, param);
-    }
-        break;
-    case MAV_PARAM_TYPE_INT32:
-    {
-        if (getAutopilotType() == MAV_AUTOPILOT_ARDUPILOTMEGA) {
-            param = QVariant((int)paramValue.param_float);
-        }
-        else {
-            param = QVariant(paramValue.param_int32);
-        }
-        parameters.value(compId)->insert(paramName, param);
-        // Emit change
-        emit parameterChanged(uasId, compId, paramName, param);
-        emit parameterChanged(uasId, compId, rawValue.param_count, rawValue.param_index, paramName, param);
-//                qDebug() << "RECEIVED PARAM:" << param;
-    }
-        break;
-    default:
-        qCritical() << "INVALID DATA TYPE USED AS PARAMETER VALUE: " << rawValue.param_type;
-    } //switch (value.param_type)
 
+    switch (rawValue.param_type) {
+        case MAV_PARAM_TYPE_REAL32:
+            if (getAutopilotType() == MAV_AUTOPILOT_ARDUPILOTMEGA) {
+                paramValue = QVariant(paramUnion.param_float);
+            } else {
+                paramValue = QVariant(paramUnion.param_float);
+            }
+            break;
+
+        case MAV_PARAM_TYPE_UINT8:
+            if (getAutopilotType() == MAV_AUTOPILOT_ARDUPILOTMEGA) {
+                paramValue = QVariant(QChar((unsigned char)paramUnion.param_float));
+            } else {
+                paramValue = QVariant(QChar((unsigned char)paramUnion.param_uint8));
+            }
+            break;
+
+        case MAV_PARAM_TYPE_INT8:
+            if (getAutopilotType() == MAV_AUTOPILOT_ARDUPILOTMEGA) {
+                paramValue = QVariant(QChar((char)paramUnion.param_float));
+            } else  {
+                paramValue = QVariant(QChar((char)paramUnion.param_int8));
+            }
+            break;
+
+        case MAV_PARAM_TYPE_INT16:
+            if (getAutopilotType() == MAV_AUTOPILOT_ARDUPILOTMEGA) {
+                paramValue = QVariant((short)paramUnion.param_float);
+            } else {
+                paramValue = QVariant(paramUnion.param_int16);
+            }
+            break;
+
+        case MAV_PARAM_TYPE_UINT32:
+            if (getAutopilotType() == MAV_AUTOPILOT_ARDUPILOTMEGA) {
+                paramValue = QVariant((unsigned int)paramUnion.param_float);
+            } else {
+                paramValue = QVariant(paramUnion.param_uint32);
+            }
+            break;
+        case MAV_PARAM_TYPE_INT32:
+            if (getAutopilotType() == MAV_AUTOPILOT_ARDUPILOTMEGA) {
+                paramValue = QVariant((int)paramUnion.param_float);
+            } else {
+                paramValue = QVariant(paramUnion.param_int32);
+            }
+            break;
+
+        default:
+            qCritical() << "INVALID DATA TYPE USED AS PARAMETER VALUE: " << rawValue.param_type;
+    }
+
+    qCDebug(UASLog) << "Received PARAM_VALUE" << paramName << paramValue << rawValue.param_type;
+
+    parameters.value(compId)->insert(paramName, paramValue);
+    emit parameterChanged(uasId, compId, paramName, paramValue);
+    emit parameterUpdate(uasId, compId, paramName, rawValue.param_type, paramValue);
+    emit parameterChanged(uasId, compId, rawValue.param_count, rawValue.param_index, paramName, paramValue);
 }
 
 /**
@@ -3204,19 +3118,11 @@ void UAS::stopHil()
 
 void UAS::shutdown()
 {
-    QMessageBox msgBox;
-    msgBox.setIcon(QMessageBox::Critical);
-    msgBox.setText("Shutting down the UAS");
-    msgBox.setInformativeText("Do you want to shut down the onboard computer?");
-
-    msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::Cancel);
-    msgBox.setDefaultButton(QMessageBox::Cancel);
-    int ret = msgBox.exec();
-
-    // Close the message box shortly after the click to prevent accidental clicks
-    QTimer::singleShot(5000, &msgBox, SLOT(reject()));
-
-    if (ret == QMessageBox::Yes)
+    QMessageBox::StandardButton button = QGCMessageBox::question(tr("Shutting down the UAS"),
+                                                                 tr("Do you want to shut down the onboard computer?"),
+                                                                 QMessageBox::Yes | QMessageBox::Cancel,
+                                                                 QMessageBox::Cancel);
+    if (button == QMessageBox::Yes)
     {
         // If the active UAS is set, execute command
         mavlink_message_t msg;
@@ -3324,58 +3230,9 @@ QString UAS::getAudioModeTextFor(int id)
 * The mode returned can be auto, stabilized, test, manual, preflight or unknown.
 * @return the short text of the mode for the id given.
 */
-QString UAS::getShortModeTextFor(uint8_t base_mode, uint32_t custom_mode, int autopilot)
+QString UAS::getShortModeTextFor(uint8_t base_mode, uint32_t custom_mode) const
 {
-    QString mode = "";
-
-    if (base_mode & MAV_MODE_FLAG_CUSTOM_MODE_ENABLED) {
-        // use custom_mode - autopilot-specific
-        if (autopilot == MAV_AUTOPILOT_PX4) {
-            union px4_custom_mode px4_mode;
-            px4_mode.data = custom_mode;
-            if (px4_mode.main_mode == PX4_CUSTOM_MAIN_MODE_MANUAL) {
-                mode += "|MANUAL";
-            } else if (px4_mode.main_mode == PX4_CUSTOM_MAIN_MODE_ALTCTL) {
-                mode += "|ALTCTL";
-            } else if (px4_mode.main_mode == PX4_CUSTOM_MAIN_MODE_POSCTL) {
-                mode += "|POSCTL";
-            } else if (px4_mode.main_mode == PX4_CUSTOM_MAIN_MODE_AUTO) {
-                mode += "|AUTO";
-                if (px4_mode.sub_mode == PX4_CUSTOM_SUB_MODE_AUTO_READY) {
-                    mode += "|READY";
-                } else if (px4_mode.sub_mode == PX4_CUSTOM_SUB_MODE_AUTO_TAKEOFF) {
-                    mode += "|TAKEOFF";
-                } else if (px4_mode.sub_mode == PX4_CUSTOM_SUB_MODE_AUTO_LOITER) {
-                    mode += "|LOITER";
-                } else if (px4_mode.sub_mode == PX4_CUSTOM_SUB_MODE_AUTO_MISSION) {
-                    mode += "|MISSION";
-                } else if (px4_mode.sub_mode == PX4_CUSTOM_SUB_MODE_AUTO_RTL) {
-                    mode += "|RTL";
-                } else if (px4_mode.sub_mode == PX4_CUSTOM_SUB_MODE_AUTO_LAND) {
-                    mode += "|LAND";
-                }
-            } else if (px4_mode.main_mode == PX4_CUSTOM_MAIN_MODE_OFFBOARD) {
-                mode += "|OFFBOARD";
-            }
-        }
-    }
-
-    // fallback to using base_mode
-    if (mode.length() == 0) {
-        // use base_mode - not autopilot-specific
-        if (base_mode == 0) {
-            mode += "|PREFLIGHT";
-        } else if (base_mode & MAV_MODE_FLAG_DECODE_POSITION_AUTO) {
-            mode += "|AUTO";
-        } else if (base_mode & MAV_MODE_FLAG_DECODE_POSITION_MANUAL) {
-            mode += "|MANUAL";
-            if (base_mode & MAV_MODE_FLAG_DECODE_POSITION_GUIDED) {
-                mode += "|GUIDED";
-            } else if (base_mode & MAV_MODE_FLAG_DECODE_POSITION_STABILIZE) {
-                mode += "|STABILIZED";
-            }
-        }
-    }
+    QString mode = AutoPilotPluginManager::instance()->getShortModeText(base_mode, custom_mode, autopilot);
 
     if (mode.length() == 0)
     {
@@ -3414,26 +3271,33 @@ const QString& UAS::getShortMode() const
 */
 void UAS::addLink(LinkInterface* link)
 {
-    if (!links->contains(link))
+    if (!links.contains(link))
     {
-        links->append(link);
+        links.append(link);
+        qCDebug(UASLog) << "addLink:" << QString("%1").arg((ulong)link, 0, 16);
         connect(link, SIGNAL(destroyed(QObject*)), this, SLOT(removeLink(QObject*)));
     }
 }
 
 void UAS::removeLink(QObject* object)
 {
-    LinkInterface* link = dynamic_cast<LinkInterface*>(object);
-    if (link)
-    {
-        links->removeAt(links->indexOf(link));
-    }
+    qCDebug(UASLog) << "removeLink:" << QString("%1").arg((ulong)object, 0, 16);
+    qCDebug(UASLog) << "link count:" << links.count();
+
+    // Do not dynamic cast or de-reference QObject, since object is either in destructor or may have already
+    // been destroyed.
+
+    LinkInterface* link = (LinkInterface*)object;
+
+    int index = links.indexOf(link);
+    Q_ASSERT(index != -1);
+    links.removeAt(index);
 }
 
 /**
 * @return the list of links
 */
-QList<LinkInterface*>* UAS::getLinks()
+QList<LinkInterface*> UAS::getLinks()
 {
     return links;
 }
@@ -3447,80 +3311,23 @@ QMap<int, QString> UAS::getComponents()
 }
 
 /**
-* Set the battery type and the  number of cells.
-* @param type of the battery
-* @param cells Number of cells.
-*/
-void UAS::setBattery(BatteryType type, int cells)
-{
-    this->batteryType = type;
-    this->cells = cells;
-    switch (batteryType)
-    {
-    case NICD:
-        break;
-    case NIMH:
-        break;
-    case LIION:
-        break;
-    case LIPOLY:
-        fullVoltage = this->cells * lipoFull;
-        emptyVoltage = this->cells * lipoEmpty;
-        break;
-    case LIFE:
-        break;
-    case AGZN:
-        break;
-    }
-}
-
-/**
 * Set the battery specificaitons: empty voltage, warning voltage, and full voltage.
 * @param specifications of the battery
 */
 void UAS::setBatterySpecs(const QString& specs)
 {
-    if (specs.length() == 0 || specs.contains("%"))
+    batteryRemainingEstimateEnabled = false;
+    bool ok;
+    QString percent = specs;
+    percent = percent.remove("%");
+    float temp = percent.toFloat(&ok);
+    if (ok)
     {
-        batteryRemainingEstimateEnabled = false;
-        bool ok;
-        QString percent = specs;
-        percent = percent.remove("%");
-        float temp = percent.toFloat(&ok);
-        if (ok)
-        {
-            warnLevelPercent = temp;
-        }
-        else
-        {
-            emit textMessageReceived(0, 0, MAV_SEVERITY_WARNING, "Could not set battery options, format is wrong");
-        }
+        warnLevelPercent = temp;
     }
     else
     {
-        batteryRemainingEstimateEnabled = true;
-        QString stringList = specs;
-        stringList = stringList.remove("V");
-        stringList = stringList.remove("v");
-        QStringList parts = stringList.split(",");
-        if (parts.length() == 3)
-        {
-            float temp;
-            bool ok;
-            // Get the empty voltage
-            temp = parts.at(0).toFloat(&ok);
-            if (ok) emptyVoltage = temp;
-            // Get the warning voltage
-            temp = parts.at(1).toFloat(&ok);
-            if (ok) warnVoltage = temp;
-            // Get the full voltage
-            temp = parts.at(2).toFloat(&ok);
-            if (ok) fullVoltage = temp;
-        }
-        else
-        {
-            emit textMessageReceived(0, 0, MAV_SEVERITY_WARNING, "Could not set battery options, format is wrong");
-        }
+        emit textMessageReceived(0, 0, MAV_SEVERITY_WARNING, "Could not set battery options, format is wrong");
     }
 }
 
@@ -3529,14 +3336,7 @@ void UAS::setBatterySpecs(const QString& specs)
 */
 QString UAS::getBatterySpecs()
 {
-    if (batteryRemainingEstimateEnabled)
-    {
-        return QString("%1V,%2V,%3V").arg(emptyVoltage).arg(warnVoltage).arg(fullVoltage);
-    }
-    else
-    {
-        return QString("%1%").arg(warnLevelPercent);
-    }
+    return QString("%1%").arg(warnLevelPercent);
 }
 
 /**
@@ -3544,15 +3344,8 @@ QString UAS::getBatterySpecs()
 */
 int UAS::calculateTimeRemaining()
 {
-    quint64 dt = QGC::groundTimeMilliseconds() - startTime;
-    double seconds = dt / 1000.0f;
-    double voltDifference = startVoltage - currentVoltage;
-    if (voltDifference <= 0) voltDifference = 0.00000000001f;
-    double dischargePerSecond = voltDifference / seconds;
-    int remaining = static_cast<int>((currentVoltage - emptyVoltage) / dischargePerSecond);
-    // Can never be below 0
-    if (remaining < 0) remaining = 0;
-    return remaining;
+    // XXX needs fixing
+    return 0;
 }
 
 /**
@@ -3560,21 +3353,6 @@ int UAS::calculateTimeRemaining()
  */
 float UAS::getChargeLevel()
 {
-    if (batteryRemainingEstimateEnabled)
-    {
-        if (lpVoltage < emptyVoltage)
-        {
-            chargeLevel = 0.0f;
-        }
-        else if (lpVoltage > fullVoltage)
-        {
-            chargeLevel = 100.0f;
-        }
-        else
-        {
-            chargeLevel = 100.0f * ((lpVoltage - emptyVoltage)/(fullVoltage - emptyVoltage));
-        }
-    }
     return chargeLevel;
 }
 
@@ -3582,7 +3360,7 @@ void UAS::startLowBattAlarm()
 {
     if (!lowBattAlarm)
     {
-        GAudioOutput::instance()->alert(tr("system %1 has low battery").arg(getUASName()));
+        GAudioOutput::instance()->alert(tr("System %1 has low battery").arg(getUASID()));
         QTimer::singleShot(3000, GAudioOutput::instance(), SLOT(startEmergency()));
         lowBattAlarm = true;
     }
@@ -3594,5 +3372,57 @@ void UAS::stopLowBattAlarm()
     {
         GAudioOutput::instance()->stopEmergency();
         lowBattAlarm = false;
+    }
+}
+
+void UAS::sendMapRCToParam(QString param_id, float scale, float value0, quint8 param_rc_channel_index, float valueMin, float valueMax)
+{
+    mavlink_message_t message;
+
+    char param_id_cstr[MAVLINK_MSG_PARAM_MAP_RC_FIELD_PARAM_ID_LEN] = {};
+    // Copy string into buffer, ensuring not to exceed the buffer size
+    for (unsigned int i = 0; i < sizeof(param_id_cstr); i++)
+    {
+        if ((int)i < param_id.length())
+        {
+            param_id_cstr[i] = param_id.toLatin1()[i];
+        }
+    }
+
+    mavlink_msg_param_map_rc_pack(mavlink->getSystemId(),
+                                  mavlink->getComponentId(),
+                                  &message,
+                                  this->uasId,
+                                  0,
+                                  param_id_cstr,
+                                  -1,
+                                  param_rc_channel_index,
+                                  value0,
+                                  scale,
+                                  valueMin,
+                                  valueMax);
+    sendMessage(message);
+    qDebug() << "Mavlink message sent";
+}
+
+void UAS::unsetRCToParameterMap()
+{
+    char param_id_cstr[MAVLINK_MSG_PARAM_MAP_RC_FIELD_PARAM_ID_LEN] = {};
+
+    for (int i = 0; i < 3; i++) {
+        mavlink_message_t message;
+        mavlink_msg_param_map_rc_pack(mavlink->getSystemId(),
+                                      mavlink->getComponentId(),
+                                      &message,
+                                      this->uasId,
+                                      0,
+                                      param_id_cstr,
+                                      -2,
+                                      i,
+                                      0.0f,
+                                      0.0f,
+                                      0.0f,
+                                      0.0f);
+        sendMessage(message);
     }
 }

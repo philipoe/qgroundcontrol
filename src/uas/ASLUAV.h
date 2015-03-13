@@ -10,7 +10,7 @@ class ASLUAV : public UAS
 
 public:
 	ASLUAV(void);
-	ASLUAV(MAVLinkProtocol* mavlink, QThread* thread, int id);
+	ASLUAV(MAVLinkProtocol* mavlink, int id);
 	~ASLUAV(void);
 
 public:
@@ -29,16 +29,12 @@ signals:
     void AslctrlDataChanged(float uElev, float uAil, float uRud, float uThrot, float roll, float pitch, float yaw, float roll_ref, float pitch_ref, float h);
 
 protected:
-	double currentVoltage1;	// [V] Primary voltage, e.g. main battery voltage
-	float lpVoltage1, tickLowpassVoltage1,lastTickVoltageValue1;
-	float emptyVoltage1, warnVoltage1, fullVoltage1;
-	float tickVoltage1;
-
-	//Currently not used. This is in UAS:CurrentVoltage instead.
-	/*double currentVoltage2; // [V] Secondary voltage, e.g. RX/PX4 voltage
-	float lpVoltage2, tickLowpassVoltage2, lastTickVoltageValue2;
-	float emptyVoltage2, warnVoltage2, fullVoltage2;
-	float tickVoltage2;*/
+	// Add an external voltage sensor in addition to PX4-onboard sensor
+	double currentVoltage_ext;	
+	float lpVoltage_ext, tickLowpassVoltage_ext,lastTickVoltageValue_ext;
+	float emptyVoltage_ext, warnVoltage_ext, fullVoltage_ext;
+	float tickVoltage_ext;
+	float startVoltage_ext;
 };
 
 #endif //_ASLUAV_H_

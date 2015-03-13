@@ -35,6 +35,7 @@ This file is part of the QGROUNDCONTROL project
 #include <QObject>
 #include <QList>
 #include <QTimer>
+#include <QPointer>
 #include "Waypoint.h"
 #include "QGCMAVLink.h"
 class UAS;
@@ -180,7 +181,7 @@ private:
 
     QList<Waypoint *> waypointsViewOnly;                  ///< local copy of current waypoint list on MAV
     QList<Waypoint *> waypointsEditable;                  ///< local editable waypoint list
-    Waypoint* currentWaypointEditable;                      ///< The currently used waypoint
+    QPointer<Waypoint> currentWaypointEditable;                      ///< The currently used waypoint
     QList<mavlink_mission_item_t *> waypoint_buffer;  ///< buffer for waypoints during communication
     QTimer protocol_timer;                          ///< Timer to catch timeouts
     bool standalone;                                ///< If standalone is set, do not write to UAS
@@ -189,7 +190,6 @@ private:
     // XXX export to settings
     static const float defaultAltitudeHomeOffset;    ///< Altitude offset in meters from home for new waypoints
     
-    QString _offlineEditingModeTitle;
     QString _offlineEditingModeMessage;
 };
 

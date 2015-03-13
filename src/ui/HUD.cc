@@ -33,7 +33,6 @@ This file is part of the QGROUNDCONTROL project
 #include <QContextMenuEvent>
 #include <QMenu>
 #include <QStandardPaths>
-#include <QFileDialog>
 #include <QPaintEvent>
 #include <QDebug>
 
@@ -45,7 +44,8 @@ This file is part of the QGROUNDCONTROL project
 #include "UAS.h"
 #include "HUD.h"
 #include "QGC.h"
-#include "MainWindow.h"
+#include "QGCApplication.h"
+#include "QGCFileDialog.h"
 
 /**
  * @warning The HUD widget will not start painting its content automatically
@@ -131,7 +131,7 @@ HUD::HUD(int width, int height, QWidget* parent)
 
     // Set up the initial color theme. This can be updated by a styleChanged
     // signal from MainWindow.
-    styleChanged(((MainWindow*)parent)->getStyle());
+    styleChanged(qgcApp()->styleIsDark());
 
     // Refresh timer
     refreshTimer->setInterval(updateInterval);
@@ -156,8 +156,7 @@ HUD::HUD(int width, int height, QWidget* parent)
 
     // Connect the themeChanged signal from the MainWindow to this widget, so it
     // can change it's styling accordingly.
-    connect((MainWindow*)parent, SIGNAL(styleChanged(MainWindow::QGC_MAINWINDOW_STYLE)),
-            this, SLOT(styleChanged(MainWindow::QGC_MAINWINDOW_STYLE)));
+    connect(qgcApp(), &QGCApplication::styleChanged, this, &HUD::styleChanged);
 
     // Connect with UAS
     connect(UASManager::instance(), SIGNAL(activeUASSet(UASInterface*)), this, SLOT(setActiveUAS(UASInterface*)));
@@ -177,37 +176,30 @@ QSize HUD::sizeHint() const
     return QSize(width(), (width()*3.0f)/4);
 }
 
-void HUD::styleChanged(MainWindow::QGC_MAINWINDOW_STYLE newTheme)
+void HUD::styleChanged(bool styleIsDark)
 {
     // Generate a background image that's dependent on the current color scheme.
     QImage fill = QImage(width(), height(), QImage::Format_Indexed8);
-    if (newTheme == MainWindow::QGC_MAINWINDOW_STYLE_LIGHT)
-    {
-        fill.fill(255);
-    }
-    else
-    {
-        fill.fill(0);
-    }
+    fill.fill(styleIsDark ? 0 : 255);
     glImage = QGLWidget::convertToGLFormat(fill);
 
     // Now set the other default colors based on the current color scheme.
-    if (newTheme == MainWindow::QGC_MAINWINDOW_STYLE_LIGHT)
-    {
-        defaultColor = QColor(0x01, 0x47, 0x01);
-        setPointColor = QColor(0x82, 0x17, 0x82);
-        warningColor = Qt::darkYellow;
-        criticalColor = Qt::darkRed;
-        infoColor = QColor(0x07, 0x82, 0x07);
-        fuelColor = criticalColor;
-    }
-    else
+    if (styleIsDark)
     {
         defaultColor = QColor(70, 200, 70);
         setPointColor = QColor(200, 20, 200);
         warningColor = Qt::yellow;
         criticalColor = Qt::red;
         infoColor = QColor(20, 200, 20);
+        fuelColor = criticalColor;
+    }
+    else
+    {
+        defaultColor = QColor(0x01, 0x47, 0x01);
+        setPointColor = QColor(0x82, 0x17, 0x82);
+        warningColor = Qt::darkYellow;
+        criticalColor = Qt::darkRed;
+        infoColor = QColor(0x07, 0x82, 0x07);
         fuelColor = criticalColor;
     }
 }
@@ -286,7 +278,7 @@ void HUD::setActiveUAS(UASInterface* uas)
 
         disconnect(this->uas, SIGNAL(localPositionChanged(UASInterface*,double,double,double,quint64)), this, SLOT(updateLocalPosition(UASInterface*,double,double,double,quint64)));
         disconnect(this->uas, SIGNAL(globalPositionChanged(UASInterface*,double,double,double,double,quint64)), this, SLOT(updateGlobalPosition(UASInterface*,double,double,double,double,quint64)));
-        disconnect(this->uas, SIGNAL(velocityChanged_NEDspeedChanged(UASInterface*,double,double,double,quint64)), this, SLOT(updateSpeed(UASInterface*,double,double,double,quint64)));
+        disconnect(this->uas, SIGNAL(velocityChanged_NED(UASInterface*,double,double,double,quint64)), this, SLOT(updateSpeed(UASInterface*,double,double,double,quint64)));
         disconnect(this->uas, SIGNAL(waypointSelected(int,int)), this, SLOT(selectWaypoint(int, int)));
 
         // Try to disconnect the image link
@@ -1226,14 +1218,7 @@ void HUD::setImageSize(int width, int height, int depth, int channels)
         }
 
         // Fill first channel of image with black pixels
-        if (MainWindow::instance()->getStyle() == MainWindow::QGC_MAINWINDOW_STYLE_LIGHT)
-        {
-            image->fill(255);
-        }
-        else
-        {
-            image->fill(0);
-        }
+        image->fill(qgcApp()->styleIsDark() ? 0 : 255);
         glImage = *image;
 
         qDebug() << __FILE__ << __LINE__ << "Setting up image";
@@ -1314,7 +1299,7 @@ void HUD::saveImage()
 
 void HUD::selectOfflineDirectory()
 {
-    QString fileName = QFileDialog::getExistingDirectory(this, tr("Select image directory"), QStandardPaths::writableLocation(QStandardPaths::DesktopLocation));
+    QString fileName = QGCFileDialog::getExistingDirectory(this, tr("Select image directory"), QStandardPaths::writableLocation(QStandardPaths::DesktopLocation));
     if (fileName != "") {
         offlineDirectory = fileName;
     }
@@ -1376,15 +1361,16 @@ void HUD::copyImage(UASInterface* uas)
     if (u)
     {
         QImage temp_im = u->getImage();
-        if (temp_im.byteCount() > 0) {
-            this->glImage = temp_im;
-        }
-
-        // Save to directory if logging is enabled
-        if (imageLoggingEnabled)
+        if (temp_im.byteCount() > 0)
         {
-            u->getImage().save(QString("%1/%2.png").arg(imageLogDirectory).arg(imageLogCounter));
-            imageLogCounter++;
+            this->glImage = temp_im;
+            
+            // Save to directory if logging is enabled
+            if (imageLoggingEnabled)
+            {
+                temp_im.save(QString("%1/%2.png").arg(imageLogDirectory).arg(imageLogCounter));
+                imageLogCounter++;
+            }
         }
     }
 }
@@ -1393,10 +1379,7 @@ void HUD::saveImages(bool save)
 {
     if (save)
     {
-        QFileDialog dialog(this);
-        dialog.setFileMode(QFileDialog::DirectoryOnly);
-
-        imageLogDirectory = QFileDialog::getExistingDirectory(this, tr("Select image log directory"), QStandardPaths::writableLocation(QStandardPaths::DesktopLocation));
+        imageLogDirectory = QGCFileDialog::getExistingDirectory(this, tr("Select image log directory"), QStandardPaths::writableLocation(QStandardPaths::DesktopLocation));
 
         qDebug() << "Logging to:" << imageLogDirectory;
 

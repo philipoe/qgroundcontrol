@@ -3,15 +3,16 @@
 #include <QString>
 #include "GAudioOutput.h"
 
-ASLUAV::ASLUAV(MAVLinkProtocol* mavlink, QThread* thread, int id)
-	: UAS(mavlink, thread, id), 
-	emptyVoltage1(9.0), 
-	warnVoltage1(10.5),
-	fullVoltage1(12.5),
-	tickVoltage1(warnVoltage1),
-	lpVoltage1(0.0),
-	tickLowpassVoltage1(0.0),
-	lastTickVoltageValue1(0.0)
+ASLUAV::ASLUAV(MAVLinkProtocol* mavlink, int id)
+	: UAS(mavlink, id), 
+	emptyVoltage_ext(9.0), 
+	warnVoltage_ext(10.5),
+	fullVoltage_ext(12.5),
+	tickVoltage_ext(warnVoltage_ext),
+	lpVoltage_ext(0.0),
+	tickLowpassVoltage_ext(0.0),
+	lastTickVoltageValue_ext(0.0),
+	startVoltage_ext(-1.0f)
 {
 }
 
@@ -41,53 +42,85 @@ void ASLUAV::receiveMessage(LinkInterface *link, mavlink_message_t message)
 #ifdef MAVLINK_ENABLED_ASLUAV
 	//std::cout << "msgid:"<<(int)message.msgid<<endl;
 
-	if (!link) return;
-    if (!links->contains(link))
-    {
-        addLink(link);
-        //        qDebug() << __FILE__ << __LINE__ << "ADDED LINK!" << link->getName();
-    }
+	if (!links.contains(link))
+	{
+		addLink(link);
+		//        qDebug() << __FILE__ << __LINE__ << "ADDED LINK!" << link->getName();
+	}
 
-    // Only accept messages from this system (condition 1)
-    // and only then if a) attitudeStamped is disabled OR b) attitudeStamped is enabled
-    // and we already got one attitude packet
-    if (message.sysid == uasId && (!attitudeStamped || (attitudeStamped && (lastAttitude != 0)) || message.msgid == MAVLINK_MSG_ID_ATTITUDE))
-    {
-        QString uasState;
-        QString stateDescription;
+	if (!components.contains(message.compid))
+	{
+		QString componentName;
 
-        bool multiComponentSourceDetected = false;
-        bool wrongComponent = false;
+		switch (message.compid)
+		{
+		case MAV_COMP_ID_ALL:
+		{
+								componentName = "ANONYMOUS";
+								break;
+		}
+		case MAV_COMP_ID_IMU:
+		{
+								componentName = "IMU #1";
+								break;
+		}
+		case MAV_COMP_ID_CAMERA:
+		{
+								   componentName = "CAMERA";
+								   break;
+		}
+		case MAV_COMP_ID_MISSIONPLANNER:
+		{
+										   componentName = "MISSIONPLANNER";
+										   break;
+		}
+		}
 
-        switch (message.compid)
-        {
-        case MAV_COMP_ID_IMU_2:
-            // Prefer IMU 2 over IMU 1 (FIXME)
-            componentID[message.msgid] = MAV_COMP_ID_IMU_2;
-            break;
-        default:
-            // Do nothing
-            break;
-        }
+		components.insert(message.compid, componentName);
+		emit componentCreated(uasId, message.compid, componentName);
+	}
 
-        // Store component ID
-        if (componentID[message.msgid] == -1)
-        {
-            // Prefer the first component
-            componentID[message.msgid] = message.compid;
-        }
-        else
-        {
-            // Got this message already
-            if (componentID[message.msgid] != message.compid)
-            {
-                componentMulti[message.msgid] = true;
-                wrongComponent = true;
-            }
-        }
+	//    qDebug() << "UAS RECEIVED from" << message.sysid << "component" << message.compid << "msg id" << message.msgid << "seq no" << message.seq;
 
-        if (componentMulti[message.msgid] == true) multiComponentSourceDetected = true;
+	// Only accept messages from this system (condition 1)
+	// and only then if a) attitudeStamped is disabled OR b) attitudeStamped is enabled
+	// and we already got one attitude packet
+	if (message.sysid == uasId && (!attitudeStamped || (attitudeStamped && (lastAttitude != 0)) || message.msgid == MAVLINK_MSG_ID_ATTITUDE))
+	{
+		QString uasState;
+		QString stateDescription;
 
+		bool multiComponentSourceDetected = false;
+		bool wrongComponent = false;
+
+		switch (message.compid)
+		{
+		case MAV_COMP_ID_IMU_2:
+			// Prefer IMU 2 over IMU 1 (FIXME)
+			componentID[message.msgid] = MAV_COMP_ID_IMU_2;
+			break;
+		default:
+			// Do nothing
+			break;
+		}
+
+		// Store component ID
+		if (componentID[message.msgid] == -1)
+		{
+			// Prefer the first component
+			componentID[message.msgid] = message.compid;
+		}
+		else
+		{
+			// Got this message already
+			if (componentID[message.msgid] != message.compid)
+			{
+				componentMulti[message.msgid] = true;
+				wrongComponent = true;
+			}
+		}
+
+		if (componentMulti[message.msgid] == true) multiComponentSourceDetected = true;
 
         //******************************************************************************
 		//*** SWITCH CUSTOM ASLUAV-MESSAGES HERE
@@ -102,30 +135,30 @@ void ASLUAV::receiveMessage(LinkInterface *link, mavlink_message_t message)
                 mavlink_msg_sens_power_decode(&message, &data);
 
 				// Battery charge/time remaining/voltage calculations
-				currentVoltage1 = data.adc121_vspb_volt;
-				lpVoltage1 = lpVoltage1*0.7f+0.3*currentVoltage1; //Was: UAS::filterVoltage()
-				tickLowpassVoltage1 = tickLowpassVoltage1*0.8f + 0.2f*currentVoltage1;
-
+				currentVoltage_ext = data.adc121_vspb_volt;
+				lpVoltage_ext = filterVoltage(currentVoltage_ext);
+				tickLowpassVoltage_ext = tickLowpassVoltage_ext*0.8f + 0.2f*currentVoltage_ext;
 				// We don't want to tick above the threshold
-				if (tickLowpassVoltage1 > tickVoltage1)
+				if (tickLowpassVoltage_ext > tickVoltage_ext)
 				{
-					lastTickVoltageValue1 = tickLowpassVoltage1;
+					lastTickVoltageValue_ext = tickLowpassVoltage_ext;
 				}
-
-				if ((startVoltage > 0.0f) && (tickLowpassVoltage1 < tickVoltage1) && (fabs(lastTickVoltageValue1 - tickLowpassVoltage1) > 0.1f)
-						/* warn if lower than treshold */
-						&& (lpVoltage1 < tickVoltage1)
-						/* warn only if we have at least the voltage of an empty LiPo cell, else we're sampling something wrong */
-						&& (currentVoltage1 > 3.3f)
-						/* warn only if current voltage is really still lower by a reasonable amount */
-						&& ((currentVoltage1 - 0.2f) < tickVoltage1)
-						/* warn only every 12 seconds */
-						&& (QGC::groundTimeUsecs() - lastVoltageWarning) > 12000000)
+				if ((startVoltage_ext > 0.0f) && (tickLowpassVoltage_ext < tickVoltage_ext) && (fabs(lastTickVoltageValue_ext - tickLowpassVoltage_ext) > 0.1f)
+					/* warn if lower than treshold */
+					&& (lpVoltage_ext < tickVoltage_ext)
+					/* warn only if we have at least the voltage of an empty LiPo cell, else we're sampling something wrong */
+					&& (currentVoltage_ext > 3.3f)
+					/* warn only if current voltage is really still lower by a reasonable amount */
+					&& ((currentVoltage_ext - 0.2f) < tickVoltage_ext)
+					/* warn only every 12 seconds */
+					&& (QGC::groundTimeUsecs() - lastVoltageWarning) > 12000000)
 				{
-					GAudioOutput::instance()->say(QString("ADC121 voltage warning: %1 volts").arg(lpVoltage1, 0, 'f', 1, QChar(' ')));
+					GAudioOutput::instance()->say(QString("ADC121 Voltage warning for system %1: %2 volts").arg(getUASID()).arg(lpVoltage, 0, 'f', 1, QChar(' ')));
 					lastVoltageWarning = QGC::groundTimeUsecs();
-					lastTickVoltageValue1 = tickLowpassVoltage1;
+					lastTickVoltageValue_ext = tickLowpassVoltage_ext;
 				}
+				
+				if (startVoltage_ext == -1.0f && currentVoltage > 0.1f) startVoltage_ext = currentVoltage_ext;
 
 				//The rest of the message handling (i.e. adding data to the plots) is done elsewhere
 				break;
@@ -137,108 +170,6 @@ void ASLUAV::receiveMessage(LinkInterface *link, mavlink_message_t message)
 				mavlink_vfr_hud_t data;	//TODO Note: It might be better to get this from a separate airspeed-mavlink-message, however that does not exist yet.
 				mavlink_msg_vfr_hud_decode(&message, &data);
 				emit AirspeedChanged(data.airspeed);
-				break;
-			}
-			case MAVLINK_MSG_ID_SYS_STATUS: 
-			// overwritten, normally handled in PxQuadMAV::receiveMessage() or UAS::receiveMessage()
-			// mods introduced apply to voltage calculations & alarms (PhOe)
-			{
-				if (multiComponentSourceDetected && wrongComponent)
-				{
-					break;
-				}
-				mavlink_sys_status_t state;
-				mavlink_msg_sys_status_decode(&message, &state);
-
-				// Prepare for sending data to the realtime plotter, which is every field excluding onboard_control_sensors_present.
-				quint64 time = getUnixTime();
-				QString name = QString("M%1:SYS_STATUS.%2").arg(message.sysid);
-				emit valueChanged(uasId, name.arg("sensors_enabled"), "bits", state.onboard_control_sensors_enabled, time);
-				emit valueChanged(uasId, name.arg("sensors_health"), "bits", state.onboard_control_sensors_health, time);
-				emit valueChanged(uasId, name.arg("errors_comm"), "-", state.errors_comm, time);
-				emit valueChanged(uasId, name.arg("errors_count1"), "-", state.errors_count1, time);
-				emit valueChanged(uasId, name.arg("errors_count2"), "-", state.errors_count2, time);
-				emit valueChanged(uasId, name.arg("errors_count3"), "-", state.errors_count3, time);
-				emit valueChanged(uasId, name.arg("errors_count4"), "-", state.errors_count4, time);
-
-				// Process CPU load.
-				emit loadChanged(this,state.load/10.0f);
-				emit valueChanged(uasId, name.arg("load"), "%", state.load/10.0f, time);
-
-				// Battery charge/time remaining/voltage calculations
-				currentVoltage = state.voltage_battery/1000.0f;
-				lpVoltage = filterVoltage(currentVoltage);
-				tickLowpassVoltage = tickLowpassVoltage*0.8f + 0.2f*currentVoltage;
-
-				// We don't want to tick above the threshold
-				if (tickLowpassVoltage > tickVoltage)
-				{
-					lastTickVoltageValue = tickLowpassVoltage;
-				}
-
-				if ((startVoltage > 0.0f) && (tickLowpassVoltage < tickVoltage) && (fabs(lastTickVoltageValue - tickLowpassVoltage) > 0.1f)
-						/* warn if lower than treshold */
-						&& (lpVoltage < tickVoltage)
-						/* warn only if we have at least the voltage of an empty LiPo cell, else we're sampling something wrong */
-						&& (currentVoltage > 3.3f)
-						/* warn only if current voltage is really still lower by a reasonable amount */
-						&& ((currentVoltage - 0.2f) < tickVoltage)
-						/* warn only every 12 seconds */
-						&& (QGC::groundTimeUsecs() - lastVoltageWarning) > 12000000)
-				{
-					GAudioOutput::instance()->say(QString("voltage warning: %1 volts").arg(lpVoltage, 0, 'f', 1, QChar(' ')));
-					lastVoltageWarning = QGC::groundTimeUsecs();
-					lastTickVoltageValue = tickLowpassVoltage;
-				}
-
-				if (startVoltage == -1.0f && currentVoltage > 0.1f) startVoltage = currentVoltage;
-				timeRemaining = calculateTimeRemaining();
-				if (!batteryRemainingEstimateEnabled && chargeLevel != -1)
-				{
-					chargeLevel = state.battery_remaining;
-				}
-
-				emit batteryChanged(this, lpVoltage, currentCurrent, getChargeLevel(), timeRemaining);
-				emit valueChanged(uasId, name.arg("battery_remaining"), "%", getChargeLevel(), time);
-				// emit voltageChanged(message.sysid, currentVoltage);
-				emit valueChanged(uasId, name.arg("battery_voltage"), "V", currentVoltage, time);
-
-				// And if the battery current draw is measured, log that also.
-				if (state.current_battery != -1)
-				{
-					currentCurrent = ((double)state.current_battery)/100.0f;
-					emit valueChanged(uasId, name.arg("battery_current"), "A", currentCurrent, time);
-				}
-
-				// LOW BATTERY ALARM
-				if (lpVoltage < warnVoltage && (currentVoltage - 0.2f) < warnVoltage && (currentVoltage > 3.3))
-				{
-					// An audio alarm. Does not generate any signals.
-					startLowBattAlarm();
-				}
-				else
-				{
-					stopLowBattAlarm();
-				}
-
-				// control_sensors_enabled:
-				// relevant bits: 11: attitude stabilization, 12: yaw position, 13: z/altitude control, 14: x/y position control
-				emit attitudeControlEnabled(state.onboard_control_sensors_enabled & (1 << 11));
-				emit positionYawControlEnabled(state.onboard_control_sensors_enabled & (1 << 12));
-				emit positionZControlEnabled(state.onboard_control_sensors_enabled & (1 << 13));
-				emit positionXYControlEnabled(state.onboard_control_sensors_enabled & (1 << 14));
-
-				// Trigger drop rate updates as needed. Here we convert the incoming
-				// drop_rate_comm value from 1/100 of a percent in a uint16 to a true
-				// percentage as a float. We also cap the incoming value at 100% as defined
-				// by the MAVLink specifications.
-				if (state.drop_rate_comm > 10000)
-				{
-					state.drop_rate_comm = 10000;
-				}
-				emit dropRateChanged(this->getUASID(), state.drop_rate_comm/100.0f);
-				emit valueChanged(uasId, name.arg("drop_rate_comm"), "%", state.drop_rate_comm/100.0f, time);
-			
 				break;
 			}
 			case MAVLINK_MSG_ID_ASLCTRL_DATA:
@@ -275,76 +206,41 @@ void ASLUAV::receiveMessage(LinkInterface *link, mavlink_message_t message)
 
 void ASLUAV::setBatterySpecs(const QString& specs)
 {
-    if (specs.length() == 0 || specs.contains("%"))
-    {
-        //TODO: Check why QGC sometimes crashes when using the setBatterySpecs function for adc121_XXX
+	if (specs.length() == 0) return;	
 
-        batteryRemainingEstimateEnabled = false;
-        bool ok;
-        QString percent = specs;
-        percent = percent.remove("%");
-        float temp = percent.toFloat(&ok);
-        if (ok)
-        {
-            warnLevelPercent = temp;
-        }
-        else
-        {
-            emit textMessageReceived(0, 0, 0, "Could not set battery options, format is wrong");
-        }
-    }
-    else
-    {
-        batteryRemainingEstimateEnabled = false;
-        QString stringList = specs;
-        stringList = stringList.remove("V");
-        stringList = stringList.remove("v");
-        QStringList parts = stringList.split(",");
-        if (parts.length() == 3)
-        {
-            float temp;
-            bool ok;
-            // Get the empty voltage
-            temp = parts.at(0).toFloat(&ok);
-            if (ok) emptyVoltage = temp;
-            // Get the warning voltage
-            temp = parts.at(1).toFloat(&ok);
-            if (ok) warnVoltage = temp;
-            // Get the full voltage
-            temp = parts.at(2).toFloat(&ok);
-            if (ok) fullVoltage = temp;
+	batteryRemainingEstimateEnabled = false;
+	QString stringList = specs;
+	stringList = stringList.remove("V");
+	stringList = stringList.remove("v");
+	QStringList parts = stringList.split(",");
 
-			tickVoltage=warnVoltage;
-        }
-		else if (parts.length() == 6)
-        {
-            float temp;
-            bool ok;
-            // Get the empty voltage
-            temp = parts.at(0).toFloat(&ok);
-            if (ok) emptyVoltage = temp;
-            // Get the warning voltage
-            temp = parts.at(1).toFloat(&ok);
-            if (ok) warnVoltage = temp;
-            // Get the full voltage
-            temp = parts.at(2).toFloat(&ok);
-            if (ok) fullVoltage = temp;
-			// Get the empty voltage
-            temp = parts.at(3).toFloat(&ok);
-            if (ok) emptyVoltage1 = temp;
-            // Get the warning voltage
-            temp = parts.at(4).toFloat(&ok);
-            if (ok) warnVoltage1 = temp;
-            // Get the full voltage
-            temp = parts.at(5).toFloat(&ok);
-            if (ok) fullVoltage1 = temp;
+	bool ok;
+	float temp;
 
-			tickVoltage=warnVoltage;
-			tickVoltage1=warnVoltage1;
-        }
-        else
-        {
-            emit textMessageReceived(0, 0, 0, "Could not set battery options, format is wrong");
-        }
-    }
+	// Assign first battery spec value: PX4-internal voltage sensor
+	if (parts.at(0).contains("%")) {
+		QString percent = parts.at(0);
+		percent = percent.remove("%");
+		float temp = percent.toFloat(&ok);
+
+		if (ok)	warnLevelPercent = temp;
+		else emit textMessageReceived(0, 0, 0, "Could not set battery options, format is wrong");
+	}
+	else {
+		temp = parts.at(0).toFloat(&ok);
+		if (ok) tickVoltage = temp;
+		else emit textMessageReceived(0, 0, 0, "Could not set battery options, format is wrong");
+	}
+
+	// Assign second battery spec value if available: External voltage sensor
+	if (parts.length() > 1) {
+		if (parts.at(1).contains("%")) {
+			emit textMessageReceived(0, 0, 0, "External voltage sensor does not support relative warn levels, but requires absolute voltage warning limit!");
+		}
+		else {
+			temp = parts.at(1).toFloat(&ok);
+			if (ok) tickVoltage_ext = temp;
+			else emit textMessageReceived(0, 0, 0, "Could not set battery options, format is wrong");
+		}
+	}
 }

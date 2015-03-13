@@ -19,18 +19,24 @@
 
 message(Qt version $$[QT_VERSION])
 
+# Load additional config flags from user_config.pri
+exists(user_config.pri):infile(user_config.pri, CONFIG) {
+    CONFIG += $$fromfile(user_config.pri, CONFIG)
+    message($$sprintf("Using user-supplied additional config: '%1' specified in user_config.pri", $$fromfile(user_config.pri, CONFIG)))
+}
+
 # Setup our supported build types. We do this once here and then use the defined config scopes
 # to allow us to easily modify suported build types in one place instead of duplicated throughout
 # the project file.
 
-!equals(QT_MAJOR_VERSION, 5) | !greaterThan(QT_MINOR_VERSION, 1) {
-    error("Unsupported Qt version, 5.2+ is required")
+!equals(QT_MAJOR_VERSION, 5) | !greaterThan(QT_MINOR_VERSION, 3) {
+    error("Unsupported Qt version, 5.4+ is required")
 }
 
 linux {
     linux-g++ | linux-g++-64 {
         message("Linux build")
-        CONFIG += LinuxBuild
+        CONFIG += LinuxBuild link_pkgconfig
     } else {
         error("Unsuported Linux toolchain, only GCC 32- or 64-bit is supported")
     }
@@ -45,7 +51,6 @@ linux {
     macx-clang | macx-llvm {
         message("Mac build")
         CONFIG += MacBuild
-        QMAKE_MAC_SDK = macosx10.9
     } else {
         error("Unsupported Mac toolchain, only 64-bit LLVM+clang is supported")
     }
@@ -106,15 +111,24 @@ QT += network \
     opengl \
     svg \
     xml \
-    webkit \
     concurrent \
     widgets \
     gui \
     serialport \
     sql \
     printsupport \
-    webkitwidgets \
-    quick
+    qml \
+    quick \
+    quickwidgets
+
+contains(DEFINES, QGC_NOTIFY_TUNES_ENABLED) {
+    QT += multimedia
+}
+
+!contains(DEFINES, DISABLE_GOOGLE_EARTH) {
+    QT += webkit webkitwidgets
+}
+
 
 #  testlib is needed even in release flavor for QSignalSpy support
 QT += testlib
@@ -131,6 +145,7 @@ MacBuild {
     CONFIG += x86_64
     CONFIG -= x86
     QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.6
+    QMAKE_MAC_SDK = macosx10.9
     ICON = $$BASEDIR/files/images/icons/macx.icns
     QT += quickwidgets
 }
@@ -152,10 +167,10 @@ WindowsBuild {
 }
 
 #
-# By default warnings as errors are turned off. Even so, in order for a pull request 
-# to be accepted you must compile cleanly with warnings as errors turned on the default 
-# set of OS builds. See http://www.qgroundcontrol.org/dev/contribute for more details. 
-# You can use the WarningsAsErrorsOn CONFIG switch to turn warnings as errors on for your 
+# By default warnings as errors are turned off. Even so, in order for a pull request
+# to be accepted you must compile cleanly with warnings as errors turned on the default
+# set of OS builds. See http://www.qgroundcontrol.org/dev/contribute for more details.
+# You can use the WarningsAsErrorsOn CONFIG switch to turn warnings as errors on for your
 # own builds.
 #
 
@@ -170,7 +185,8 @@ WindowsBuild {
 	QMAKE_CXXFLAGS_WARN_ON += /W3 \
         /wd4996 \   # silence warnings about deprecated strcpy and whatnot
         /wd4005 \   # silence warnings about macro redefinition
-        /wd4290     # ignore exception specifications
+        /wd4290 \   # ignore exception specifications
+        /Zc:strictStrings-  # work around win 8.1 sdk sapi.h problem
     WarningsAsErrorsOn {
         QMAKE_CXXFLAGS_WARN_ON += /WX
     }
@@ -194,6 +210,8 @@ ReleaseBuild {
     }
 }
 
+# qextserialport should not be used by general QGroundControl code. Use QSerialPort instead. This is only
+# here to support special case Firmware Upgrade code.
 include(libs/qextserialport/src/qextserialport.pri)
 
 #
@@ -228,7 +246,7 @@ RESOURCES += qgroundcontrol.qrc \
 TRANSLATIONS += \
     es-MX.ts \
     en-US.ts
-    
+
 DEPENDPATH += \
     . \
     plugins
@@ -243,22 +261,25 @@ INCLUDEPATH += \
     src/ui/map \
     src/uas \
     src/comm \
+    src/audio \
     include/ui \
     src/input \
     src/lib/qmapcontrol \
     src/ui/mavlink \
     src/ui/param \
-    src/ui/watchdog \
     src/ui/map3D \
     src/ui/mission \
     src/ui/designer \
     src/ui/configuration \
     src/ui/px4_configuration \
-    src/ui/main
+    src/ui/main \
+    src/ui/toolbar \
+    src/VehicleSetup \
+    src/AutoPilotPlugins \
+    src/QmlControls
 
 FORMS += \
     src/ui/MainWindow.ui \
-    src/ui/CommSettings.ui \
     src/ui/SerialSettings.ui \
     src/ui/UASControl.ui \
     src/ui/UASList.ui \
@@ -267,36 +288,28 @@ FORMS += \
     src/ui/UASView.ui \
     src/ui/ParameterInterface.ui \
     src/ui/WaypointList.ui \
-    src/ui/ObjectDetectionView.ui \
     src/ui/JoystickWidget.ui \
     src/ui/DebugConsole.ui \
     src/ui/HDDisplay.ui \
     src/ui/MAVLinkSettingsWidget.ui \
     src/ui/AudioOutputWidget.ui \
     src/ui/QGCSensorSettingsWidget.ui \
-    src/ui/watchdog/WatchdogControl.ui \
-    src/ui/watchdog/WatchdogProcessView.ui \
-    src/ui/watchdog/WatchdogView.ui \
     src/ui/QGCDataPlot2D.ui \
-    src/ui/QGCRemoteControlView.ui \
     src/ui/QMap3D.ui \
-    src/ui/QGCWebView.ui \
     src/ui/map3D/QGCGoogleEarthView.ui \
     src/ui/uas/QGCUnconnectedInfoWidget.ui \
     src/ui/designer/QGCToolWidget.ui \
     src/ui/designer/QGCParamSlider.ui \
     src/ui/designer/QGCActionButton.ui \
     src/ui/designer/QGCCommandButton.ui \
-    src/ui/designer/QGCComboBox.ui \
+    src/ui/designer/QGCToolWidgetComboBox.ui \
     src/ui/designer/QGCTextLabel.ui \
     src/ui/designer/QGCXYPlot.ui \
     src/ui/QGCMAVLinkLogPlayer.ui \
     src/ui/QGCWaypointListMulti.ui \
     src/ui/QGCUASFileViewMulti.ui \
-    src/ui/QGCUDPLinkConfiguration.ui \
     src/ui/QGCTCPLinkConfiguration.ui \
-    src/ui/QGCSettingsWidget.ui \
-    src/ui/UASControlParameters.ui \
+    src/ui/SettingsDialog.ui \
     src/ui/map/QGCMapTool.ui \
     src/ui/map/QGCMapToolBar.ui \
     src/ui/QGCMAVLinkInspector.ui \
@@ -317,46 +330,44 @@ FORMS += \
     src/ui/mission/QGCMissionNavSweep.ui \
     src/ui/mission/QGCMissionDoStartSearch.ui \
     src/ui/mission/QGCMissionDoFinishSearch.ui \
-    src/ui/QGCPX4VehicleConfig.ui \
     src/ui/QGCHilConfiguration.ui \
     src/ui/QGCHilFlightGearConfiguration.ui \
     src/ui/QGCHilJSBSimConfiguration.ui \
     src/ui/QGCHilXPlaneConfiguration.ui \
     src/ui/uas/UASQuickView.ui \
     src/ui/uas/UASQuickViewItemSelect.ui \
-    src/ui/uas/UASActionsWidget.ui \
     src/ui/QGCTabbedInfoView.ui \
     src/ui/UASRawStatusView.ui \
-    src/ui/uas/QGCMessageView.ui \
+    src/ui/uas/UASMessageView.ui \
     src/ui/JoystickButton.ui \
     src/ui/JoystickAxis.ui \
-    src/ui/QGCConfigView.ui \
     src/ui/configuration/terminalconsole.ui \
     src/ui/configuration/SerialSettingsDialog.ui \
     src/ui/px4_configuration/QGCPX4AirframeConfig.ui \
-    src/ui/px4_configuration/QGCPX4MulticopterConfig.ui \
-    src/ui/px4_configuration/QGCPX4SensorCalibration.ui \
     src/ui/px4_configuration/PX4RCCalibration.ui \
-    src/ui/px4_configuration/PX4FirmwareUpgrade.ui \
     src/ui/QGCUASFileView.ui \
+    src/QGCQmlWidgetHolder.ui \
+    src/ui/QGCMapRCToParamDialog.ui \
+    src/ui/QGCLinkConfiguration.ui \
+    src/ui/QGCCommConfiguration.ui \
+    src/ui/QGCUDPLinkConfiguration.ui
     src/ui/AutoTrim.ui
 
 HEADERS += \
     src/MG.h \
-    src/QGCCore.h \
+    src/QGCApplication.h \
+    src/QGCSingleton.h \
     src/uas/UASInterface.h \
     src/uas/UAS.h \
     src/uas/UASManager.h \
     src/comm/LinkManager.h \
     src/comm/LinkInterface.h \
-    src/comm/SerialLinkInterface.h \
     src/comm/SerialLink.h \
     src/comm/ProtocolInterface.h \
     src/comm/MAVLinkProtocol.h \
     src/comm/QGCFlightGearLink.h \
     src/comm/QGCJSBSimLink.h \
     src/comm/QGCXPlaneLink.h \
-    src/ui/CommConfigurationWindow.h \
     src/ui/SerialConfigurationWindow.h \
     src/ui/MainWindow.h \
     src/ui/uas/UASControlWidget.h \
@@ -376,7 +387,6 @@ HEADERS += \
     src/ui/ParameterInterface.h \
     src/ui/WaypointList.h \
     src/Waypoint.h \
-    src/ui/ObjectDetectionView.h \
     src/input/JoystickInput.h \
     src/ui/JoystickWidget.h \
     src/ui/DebugConsole.h \
@@ -388,25 +398,12 @@ HEADERS += \
     src/ui/QGCParamWidget.h \
     src/ui/QGCSensorSettingsWidget.h \
     src/ui/linechart/Linecharts.h \
-    src/uas/PxQuadMAV.h \
-    src/ui/watchdog/WatchdogControl.h \
-    src/ui/watchdog/WatchdogProcessView.h \
-    src/ui/watchdog/WatchdogView.h \
     src/uas/UASWaypointManager.h \
     src/ui/HSIDisplay.h \
     src/QGC.h \
     src/ui/QGCDataPlot2D.h \
     src/ui/linechart/IncrementalPlot.h \
-    src/ui/QGCRemoteControlView.h \
-    src/ui/RadioCalibration/RadioCalibrationData.h \
-    src/ui/RadioCalibration/RadioCalibrationWindow.h \
-    src/ui/RadioCalibration/AirfoilServoCalibrator.h \
-    src/ui/RadioCalibration/SwitchCalibrator.h \
-    src/ui/RadioCalibration/CurveCalibrator.h \
-    src/ui/RadioCalibration/AbstractCalibrator.h \
     src/comm/QGCMAVLink.h \
-    src/ui/QGCWebView.h \
-    src/ui/map3D/QGCWebPage.h \
     src/ui/QGCMainWindowAPConfigurator.h \
     src/comm/MAVLinkSwarmSimulationLink.h \
     src/ui/uas/QGCUnconnectedInfoWidget.h \
@@ -414,7 +411,7 @@ HEADERS += \
     src/ui/designer/QGCParamSlider.h \
     src/ui/designer/QGCCommandButton.h \
     src/ui/designer/QGCToolWidgetItem.h \
-    src/ui/designer/QGCComboBox.h \
+    src/ui/designer/QGCToolWidgetComboBox.h \
     src/ui/designer/QGCTextLabel.h \
     src/ui/designer/QGCRadioChannelDisplay.h \
     src/ui/designer/QGCXYPlot.h \
@@ -425,10 +422,8 @@ HEADERS += \
     src/uas/QGCMAVLinkUASFactory.h \
     src/ui/QGCWaypointListMulti.h \
     src/ui/QGCUASFileViewMulti.h \
-    src/ui/QGCUDPLinkConfiguration.h \
     src/ui/QGCTCPLinkConfiguration.h \
-    src/ui/QGCSettingsWidget.h \
-    src/ui/uas/UASControlParameters.h \
+    src/ui/SettingsDialog.h \
     src/uas/QGCUASParamManager.h \
     src/ui/map/QGCMapWidget.h \
     src/ui/map/MAV2DIcon.h \
@@ -437,7 +432,6 @@ HEADERS += \
     src/ui/map/QGCMapToolBar.h \
     src/QGCGeo.h \
     src/ui/QGCToolBar.h \
-    src/ui/QGCStatusBar.h \
     src/ui/QGCMAVLinkInspector.h \
     src/ui/MAVLinkDecoder.h \
     src/ui/WaypointViewOnlyView.h \
@@ -458,27 +452,23 @@ HEADERS += \
     src/ui/mission/QGCMissionNavSweep.h \
     src/ui/mission/QGCMissionDoStartSearch.h \
     src/ui/mission/QGCMissionDoFinishSearch.h \
-    src/ui/QGCPX4VehicleConfig.h \
     src/comm/QGCHilLink.h \
     src/ui/QGCHilConfiguration.h \
     src/ui/QGCHilFlightGearConfiguration.h \
     src/ui/QGCHilJSBSimConfiguration.h \
     src/ui/QGCHilXPlaneConfiguration.h \
-    src/ui/submainwindow.h \
     src/ui/uas/UASQuickView.h \
     src/ui/uas/UASQuickViewItem.h \
     src/ui/linechart/ChartPlot.h \
     src/ui/uas/UASQuickViewItemSelect.h \
     src/ui/uas/UASQuickViewTextItem.h \
     src/ui/uas/UASQuickViewGaugeItem.h \
-    src/ui/uas/UASActionsWidget.h \
     src/ui/QGCTabbedInfoView.h \
     src/ui/UASRawStatusView.h \
     src/ui/PrimaryFlightDisplay.h \
-    src/ui/uas/QGCMessageView.h \
+    src/ui/uas/UASMessageView.h \
     src/ui/JoystickButton.h \
     src/ui/JoystickAxis.h \
-    src/ui/QGCConfigView.h \
     src/ui/configuration/console.h \
     src/ui/configuration/SerialSettingsDialog.h \
     src/ui/configuration/terminalconsole.h \
@@ -488,27 +478,39 @@ HEADERS += \
     src/ui/QGCPendingParamWidget.h \
     src/ui/px4_configuration/QGCPX4AirframeConfig.h \
     src/ui/QGCBaseParamWidget.h \
-    src/ui/px4_configuration/QGCPX4MulticopterConfig.h \
-    src/ui/px4_configuration/QGCPX4SensorCalibration.h \
     src/ui/px4_configuration/PX4RCCalibration.h \
     src/ui/px4_configuration/RCValueWidget.h \
-    src/ui/px4_configuration/PX4Bootloader.h \
-    src/ui/px4_configuration/PX4FirmwareUpgradeThread.h \
-    src/ui/px4_configuration/PX4FirmwareUpgrade.h \
-    src/ui/menuactionhelper.h \
     src/uas/UASManagerInterface.h \
     src/uas/QGCUASParamManagerInterface.h \
     src/uas/QGCUASFileManager.h \
     src/ui/QGCUASFileView.h \
-    src/uas/QGCUASWorker.h \
     src/CmdLineOptParser.h \
     src/uas/QGXPX4UAS.h \
+    src/QGCFileDialog.h \
+    src/QGCMessageBox.h \
+    src/QGCComboBox.h \
+    src/QGCTemporaryFile.h \
+    src/audio/QGCAudioWorker.h \
+    src/QGCQuickWidget.h \
+    src/QGCPalette.h \
+    src/QGCQmlWidgetHolder.h \
+    src/ui/QGCParamTreeWidget.h \
+    src/ui/QGCMapRCToParamDialog.h \
+    src/QGCDockWidget.h \
+    src/ui/QGCLinkConfiguration.h \
+    src/comm/LinkConfiguration.h \
+    src/ui/QGCCommConfiguration.h \
+    src/ui/QGCUDPLinkConfiguration.h \
+    src/uas/UASMessageHandler.h \
+    src/ui/toolbar/MainToolBar.h \
+    src/QmlControls/ScreenTools.h \
     src/uas/ASLUAV.h \
     src/ui/AutoTrim.h
 
 SOURCES += \
     src/main.cc \
-    src/QGCCore.cc \
+    src/QGCApplication.cc \
+    src/QGCSingleton.cc \
     src/uas/UASManager.cc \
     src/uas/UAS.cc \
     src/comm/LinkManager.cc \
@@ -517,7 +519,6 @@ SOURCES += \
     src/comm/QGCFlightGearLink.cc \
     src/comm/QGCJSBSimLink.cc \
     src/comm/QGCXPlaneLink.cc \
-    src/ui/CommConfigurationWindow.cc \
     src/ui/SerialConfigurationWindow.cc \
     src/ui/MainWindow.cc \
     src/ui/uas/UASControlWidget.cc \
@@ -536,7 +537,6 @@ SOURCES += \
     src/ui/ParameterInterface.cc \
     src/ui/WaypointList.cc \
     src/Waypoint.cc \
-    src/ui/ObjectDetectionView.cc \
     src/input/JoystickInput.cc \
     src/ui/JoystickWidget.cc \
     src/ui/DebugConsole.cc \
@@ -548,24 +548,11 @@ SOURCES += \
     src/ui/QGCParamWidget.cc \
     src/ui/QGCSensorSettingsWidget.cc \
     src/ui/linechart/Linecharts.cc \
-    src/uas/PxQuadMAV.cc \
-    src/ui/watchdog/WatchdogControl.cc \
-    src/ui/watchdog/WatchdogProcessView.cc \
-    src/ui/watchdog/WatchdogView.cc \
     src/uas/UASWaypointManager.cc \
     src/ui/HSIDisplay.cc \
     src/QGC.cc \
     src/ui/QGCDataPlot2D.cc \
     src/ui/linechart/IncrementalPlot.cc \
-    src/ui/QGCRemoteControlView.cc \
-    src/ui/RadioCalibration/RadioCalibrationWindow.cc \
-    src/ui/RadioCalibration/AirfoilServoCalibrator.cc \
-    src/ui/RadioCalibration/SwitchCalibrator.cc \
-    src/ui/RadioCalibration/CurveCalibrator.cc \
-    src/ui/RadioCalibration/AbstractCalibrator.cc \
-    src/ui/RadioCalibration/RadioCalibrationData.cc \
-    src/ui/QGCWebView.cc \
-    src/ui/map3D/QGCWebPage.cc \
     src/ui/QGCMainWindowAPConfigurator.cc \
     src/comm/MAVLinkSwarmSimulationLink.cc \
     src/ui/uas/QGCUnconnectedInfoWidget.cc \
@@ -573,7 +560,7 @@ SOURCES += \
     src/ui/designer/QGCParamSlider.cc \
     src/ui/designer/QGCCommandButton.cc \
     src/ui/designer/QGCToolWidgetItem.cc \
-    src/ui/designer/QGCComboBox.cc \
+    src/ui/designer/QGCToolWidgetComboBox.cc \
     src/ui/designer/QGCTextLabel.cc \
     src/ui/designer/QGCRadioChannelDisplay.cpp \
     src/ui/designer/QGCXYPlot.cc \
@@ -584,10 +571,8 @@ SOURCES += \
     src/uas/QGCMAVLinkUASFactory.cc \
     src/ui/QGCWaypointListMulti.cc \
     src/ui/QGCUASFileViewMulti.cc \
-    src/ui/QGCUDPLinkConfiguration.cc \
     src/ui/QGCTCPLinkConfiguration.cc \
-    src/ui/QGCSettingsWidget.cc \
-    src/ui/uas/UASControlParameters.cpp \
+    src/ui/SettingsDialog.cc \
     src/uas/QGCUASParamManager.cc \
     src/ui/map/QGCMapWidget.cc \
     src/ui/map/MAV2DIcon.cc \
@@ -595,7 +580,6 @@ SOURCES += \
     src/ui/map/QGCMapTool.cc \
     src/ui/map/QGCMapToolBar.cc \
     src/ui/QGCToolBar.cc \
-    src/ui/QGCStatusBar.cc \
     src/ui/QGCMAVLinkInspector.cc \
     src/ui/MAVLinkDecoder.cc \
     src/ui/WaypointViewOnlyView.cc \
@@ -616,26 +600,22 @@ SOURCES += \
     src/ui/mission/QGCMissionNavSweep.cc \
     src/ui/mission/QGCMissionDoStartSearch.cc \
     src/ui/mission/QGCMissionDoFinishSearch.cc \
-    src/ui/QGCPX4VehicleConfig.cc \
     src/ui/QGCHilConfiguration.cc \
     src/ui/QGCHilFlightGearConfiguration.cc \
     src/ui/QGCHilJSBSimConfiguration.cc \
     src/ui/QGCHilXPlaneConfiguration.cc \
-    src/ui/submainwindow.cpp \
     src/ui/uas/UASQuickViewItem.cc \
     src/ui/uas/UASQuickView.cc \
     src/ui/linechart/ChartPlot.cc \
     src/ui/uas/UASQuickViewTextItem.cc \
     src/ui/uas/UASQuickViewGaugeItem.cc \
     src/ui/uas/UASQuickViewItemSelect.cc \
-    src/ui/uas/UASActionsWidget.cpp \
     src/ui/QGCTabbedInfoView.cpp \
     src/ui/UASRawStatusView.cpp \
     src/ui/PrimaryFlightDisplay.cc \
     src/ui/JoystickButton.cc \
     src/ui/JoystickAxis.cc \
-    src/ui/uas/QGCMessageView.cc \
-    src/ui/QGCConfigView.cc \
+    src/ui/uas/UASMessageView.cc \
     src/ui/configuration/terminalconsole.cpp \
     src/ui/configuration/console.cpp \
     src/ui/configuration/SerialSettingsDialog.cc \
@@ -645,19 +625,29 @@ SOURCES += \
     src/ui/QGCPendingParamWidget.cc \
     src/ui/px4_configuration/QGCPX4AirframeConfig.cc \
     src/ui/QGCBaseParamWidget.cc \
-    src/ui/px4_configuration/QGCPX4MulticopterConfig.cc \
-    src/ui/px4_configuration/QGCPX4SensorCalibration.cc \
     src/ui/px4_configuration/PX4RCCalibration.cc \
     src/ui/px4_configuration/RCValueWidget.cc \
-    src/ui/px4_configuration/PX4Bootloader.cc \
-    src/ui/px4_configuration/PX4FirmwareUpgradeThread.cc \
-    src/ui/px4_configuration/PX4FirmwareUpgrade.cc \
-    src/ui/menuactionhelper.cpp \
     src/uas/QGCUASFileManager.cc \
     src/ui/QGCUASFileView.cc \
-    src/uas/QGCUASWorker.cc \
     src/CmdLineOptParser.cc \
     src/uas/QGXPX4UAS.cc \
+    src/QGCFileDialog.cc \
+    src/QGCComboBox.cc \
+    src/QGCTemporaryFile.cc \
+    src/audio/QGCAudioWorker.cpp \
+    src/QGCQuickWidget.cc \
+    src/QGCPalette.cc \
+    src/QGCQmlWidgetHolder.cpp \
+    src/ui/QGCParamTreeWidget.cpp \
+    src/ui/QGCMapRCToParamDialog.cpp \
+    src/QGCDockWidget.cc \
+    src/ui/QGCLinkConfiguration.cc \
+    src/comm/LinkConfiguration.cc \
+    src/ui/QGCCommConfiguration.cc \
+    src/ui/QGCUDPLinkConfiguration.cc \
+    src/uas/UASMessageHandler.cc \
+    src/ui/toolbar/MainToolBar.cc \
+    src/QmlControls/ScreenTools.cc \
     src/uas/ASLUAV.cc \
     src/ui/AutoTrim.cpp
 
@@ -665,8 +655,8 @@ SOURCES += \
 # Unit Test specific configuration goes here
 #
 # We have to special case Windows debug_and_release builds because you can't have files
-# which are only in the debug variant [QTBUG-40351]. So in this case we include unit tests 
-# even in the release variant. If you want a Windows release build with no unit tests run 
+# which are only in the debug variant [QTBUG-40351]. So in this case we include unit tests
+# even in the release variant. If you want a Windows release build with no unit tests run
 # qmake with CONFIG-=debug_and_release CONFIG+=release.
 #
 
@@ -678,8 +668,9 @@ INCLUDEPATH += \
 	src/qgcunittest
 
 HEADERS += \
-	src/qgcunittest/AutoTest.h \
-	src/qgcunittest/UASUnitTest.h \
+    src/qgcunittest/UnitTest.h \
+    src/qgcunittest/MessageBoxTest.h \
+    src/qgcunittest/FileDialogTest.h \
     src/qgcunittest/MockLink.h \
     src/qgcunittest/MockLinkMissionItemHandler.h \
 	src/qgcunittest/MockUASManager.h \
@@ -692,10 +683,20 @@ HEADERS += \
 	src/qgcunittest/TCPLinkTest.h \
 	src/qgcunittest/TCPLoopBackServer.h \
 	src/qgcunittest/QGCUASFileManagerTest.h \
-    src/qgcunittest/PX4RCCalibrationTest.h
+    src/qgcunittest/PX4RCCalibrationTest.h \
+    src/qgcunittest/LinkManagerTest.h \
+    src/qgcunittest/MainWindowTest.h \
+    src/qgcunittest/MavlinkLogTest.h \
+    src/FactSystem/FactSystemTestBase.h \
+    src/FactSystem/FactSystemTestPX4.h \
+    src/FactSystem/FactSystemTestGeneric.h \
+    src/QmlControls/QmlTestWidget.h \
+    src/VehicleSetup/SetupViewTest.h \
 
 SOURCES += \
-	src/qgcunittest/UASUnitTest.cc \
+    src/qgcunittest/UnitTest.cc \
+    src/qgcunittest/MessageBoxTest.cc \
+    src/qgcunittest/FileDialogTest.cc \
     src/qgcunittest/MockLink.cc \
     src/qgcunittest/MockLinkMissionItemHandler.cc \
 	src/qgcunittest/MockUASManager.cc \
@@ -707,6 +708,93 @@ SOURCES += \
 	src/qgcunittest/TCPLinkTest.cc \
 	src/qgcunittest/TCPLoopBackServer.cc \
 	src/qgcunittest/QGCUASFileManagerTest.cc \
-    src/qgcunittest/PX4RCCalibrationTest.cc
+    src/qgcunittest/PX4RCCalibrationTest.cc \
+    src/qgcunittest/LinkManagerTest.cc \
+    src/qgcunittest/MainWindowTest.cc \
+    src/qgcunittest/MavlinkLogTest.cc \
+    src/FactSystem/FactSystemTestBase.cc \
+    src/FactSystem/FactSystemTestPX4.cc \
+    src/FactSystem/FactSystemTestGeneric.cc \
+    src/QmlControls/QmlTestWidget.cc \
+    src/VehicleSetup/SetupViewTest.cc \
 
 }
+
+#
+# AutoPilot Plugin Support
+#
+
+INCLUDEPATH += \
+    src/VehicleSetup
+
+FORMS += \
+    src/VehicleSetup/ParameterEditor.ui \
+    src/ui/QGCPX4VehicleConfig.ui \
+    src/VehicleSetup/SetupView.ui \
+
+HEADERS+= \
+    src/VehicleSetup/SetupView.h \
+    src/VehicleSetup/ParameterEditor.h \
+    src/VehicleSetup/VehicleComponent.h \
+    src/VehicleSetup/FirmwareUpgradeController.h \
+    src/VehicleSetup/PX4Bootloader.h \
+    src/VehicleSetup/PX4FirmwareUpgradeThread.h \
+    src/AutoPilotPlugins/AutoPilotPluginManager.h \
+    src/AutoPilotPlugins/AutoPilotPlugin.h \
+    src/AutoPilotPlugins/Generic/GenericAutoPilotPlugin.h \
+    src/AutoPilotPlugins/Generic/GenericParameterFacts.h \
+    src/AutoPilotPlugins/PX4/PX4AutoPilotPlugin.h \
+    src/AutoPilotPlugins/PX4/PX4Component.h \
+    src/AutoPilotPlugins/PX4/RadioComponent.h \
+    src/AutoPilotPlugins/PX4/FlightModesComponent.h \
+    src/AutoPilotPlugins/PX4/FlightModesComponentController.h \
+    src/AutoPilotPlugins/PX4/AirframeComponent.h \
+    src/AutoPilotPlugins/PX4/SensorsComponent.h \
+    src/AutoPilotPlugins/PX4/SensorsComponentController.h \
+    src/AutoPilotPlugins/PX4/SafetyComponent.h \
+    src/AutoPilotPlugins/PX4/PowerComponent.h \
+    src/AutoPilotPlugins/PX4/PX4ParameterFacts.h \
+
+SOURCES += \
+    src/VehicleSetup/SetupView.cc \
+    src/VehicleSetup/ParameterEditor.cc \
+    src/VehicleSetup/VehicleComponent.cc \
+    src/VehicleSetup/FirmwareUpgradeController.cc \
+    src/VehicleSetup/PX4Bootloader.cc \
+    src/VehicleSetup/PX4FirmwareUpgradeThread.cc \
+    src/AutoPilotPlugins/AutoPilotPluginManager.cc \
+    src/AutoPilotPlugins/AutoPilotPlugin.cc \
+    src/AutoPilotPlugins/Generic/GenericAutoPilotPlugin.cc \
+    src/AutoPilotPlugins/Generic/GenericParameterFacts.cc \
+    src/AutoPilotPlugins/PX4/PX4AutoPilotPlugin.cc \
+    src/AutoPilotPlugins/PX4/PX4Component.cc \
+    src/AutoPilotPlugins/PX4/RadioComponent.cc \
+    src/AutoPilotPlugins/PX4/FlightModesComponent.cc \
+    src/AutoPilotPlugins/PX4/FlightModesComponentController.cc \
+    src/AutoPilotPlugins/PX4/AirframeComponent.cc \
+    src/AutoPilotPlugins/PX4/SensorsComponent.cc \
+    src/AutoPilotPlugins/PX4/SensorsComponentController.cc \
+    src/AutoPilotPlugins/PX4/SafetyComponent.cc \
+    src/AutoPilotPlugins/PX4/PowerComponent.cc \
+    src/AutoPilotPlugins/PX4/PX4ParameterFacts.cc \
+
+# Fact System code
+
+INCLUDEPATH += \
+    src/FactSystem
+
+HEADERS += \
+    src/FactSystem/FactSystem.h \
+    src/FactSystem/Fact.h \
+    src/FactSystem/FactBinder.h \
+    src/FactSystem/FactMetaData.h \
+    src/FactSystem/FactValidator.h \
+    src/FactSystem/FactLoader.h \
+
+SOURCES += \
+    src/FactSystem/FactSystem.cc \
+    src/FactSystem/Fact.cc \
+    src/FactSystem/FactBinder.cc \
+    src/FactSystem/FactMetaData.cc \
+    src/FactSystem/FactValidator.cc \
+    src/FactSystem/FactLoader.cc \

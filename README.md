@@ -1,6 +1,8 @@
 # QGroundControl
 ## Open Source Micro Air Vehicle Ground Control Station
 
+[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/mavlink/qgroundcontrol?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 
 * Project:
 <http://qgroundcontrol.org>
@@ -21,10 +23,9 @@ There are three ways to obtain the QGroundControl source code from our GitHub re
 ### Clone the Repository
 This option assumes that you have Git already. To clone (checkout) the QGC repository, run the following command in the directory that you want the qgroundcontrol folder to be created:
 
-git clone git://github.com/mavlink/qgroundcontrol.git
-cd qgroundcontrol
-git submodule init
-git submodule update
+```
+git clone --recursive git://github.com/mavlink/qgroundcontrol.git
+```
 
 ### Fork the Repository
 If you plan to contribute to the development of QGC, you will want this option, which also requires that you have Git set up. To fork the QGC repository, do the following:
@@ -35,8 +36,10 @@ Fork the QGC Repo
 ### Initialize submodules
 After cloning or forking you will need to initialize and update the submodules using these commands in you qgroundcontrol source directory:
 
+```
 git submodule init
 git submodule update
+```
 
 Each time you pull new source to your repository you should re-run "git submodule update" to get the latest submodules as well.
 
@@ -46,28 +49,28 @@ QGroundControl builds are supported for OSX, Linux and Windows. See the individu
 ### Build on Mac OSX
 Supported builds are 64 bit, built using the clang compiler.
 
-#### Install SDL prerequisite
-
-1. Download SDL 1.2 from:  <http://www.libsdl.org/release/SDL-1.2.14.dmg>
-2. From the SDL disk image, copy the `sdl.framework` bundle to `/Library/Frameworks` directory (if you are not an admin copy to `~/Library/Frameworks`)
-
 #### Install QT
 - - -
-1. Download Qt 5.3 from: <http://download.qt-project.org/official_releases/qt/5.3/5.3.1/qt-opensource-mac-x64-clang-5.3.1.dmg>
+1. Download Qt 5.4 from: <http://download.qt-project.org/official_releases/qt/5.4/5.4.0/qt-opensource-mac-x64-clang-5.4.0.dmg>
 2. Double click the package installer and follow instructions.
 
 #### Build QGroundControl
 1. From the terminal change directory to your `groundcontrol` directory
-2. Run `~/Qt5.3.1/5.3/clang_64/bin/qmake qgroundcontrol.pro -r -spec macx-clang`. If you installed a different version of Qt, or installed to a different location you may need to change the first portion of the path.
+2. Run `~/Qt/5.4/clang_64/bin/qmake qgroundcontrol.pro -r -spec macx-clang`. If you installed a different version of Qt, or installed to a different location you may need to change the first portion of the path.
 3. Run `make`
 
 ### Build on Linux
 Supported builds for Linux are 32 or 64-bit, built using gcc.
 
-#### Install Qt5.1+ and SDL1.2 prerequistites
-* For Ubuntu: `sudo apt-get install qtcreator qttools5-dev qtbase5-dev qt5-default qtdeclarative5-dev libqt5serialport5-dev libqt5svg5-dev libqt5webkit5-dev libsdl1.2-dev build-essential libudev-dev`
-* For Fedora: `sudo yum install qt-creator qt5-qtbase-devel qt5-qtdeclarative-devel qt5-qtserialport-devel qt5-qtsvg-devel qt5-qtwebkit-devel SDL-devel SDL-static systemd-devel`
+#### Install Qt5.4 and SDL1.2 prerequistites
+* For Fedora: `sudo yum install qt-creator qt5-qtbase-devel qt5-qtdeclarative-devel qt5-qtserialport-devel qt5-qtsvg-devel qt5-qtwebkit-devel SDL-devel SDL-static systemd-devel qt5-qtgraphicaleffects qt5-qtquickcontrols`
 * For Arch Linux: `pacman -Sy qtcreator qt5-base qt5-declarative qt5-serialport qt5-svg qt5-webkit`
+* For Ubuntu: Please be aware that the time of writing, Qt5.4 is unavailable in the official repositories Ubuntu 14.04/Mint 17
+    * Add this PPA to your sources.list: `ppa:beineri/opt-qt541-trusty`
+        * If you get a 404 error from "apt-get update" below, open System Settings:Software & Updates:Other Software and edit the entry for opt-qt541-trusty to reference Distribution: trusty.
+    * Run the following in your terminal: `sudo apt-get update && sudo apt-get install qt54tools qt54base qt54declarative qt54serialport qt54svg qt54webkit qt54quickcontrols qt54xmlpatterns qt54x11extras qt54websockets qt54sensors qt54script qt54quick1 qt54qbs qt54multimedia qt54location qt54imageformats qt54graphicaleffects qt54creator qt54connectivity`
+    * Next, set the environment variables by executing in the terminal: `source /opt/qt54/bin/qt54-env.sh` or copy and paste the contents to your `~/.profile` file to set them on login.
+    * Verify that the variables have been set: `echo $PATH && echo $QTDIR`. The output should read `/opt/qt54/bin:...` and `/opt/qt54`.
 
 #### [Optional] Install additional libraries
 * For text-to-speech (espeak)
@@ -90,8 +93,8 @@ Supported builds for Windows are 32 bit only built using Visual Studio 2013 or h
 #### Install Visual Studio Express 2013
 Only compilation using Visual Studio 2013 is supported. Download and install Visual Studio Express Edition (free) from here: <http://www.visualstudio.com/downloads/download-visual-studio-vs#d-express-windows-desktop>. Make sure you install the Windows Desktop version.
 
-#### Install QT
-Download Qt 5.3 from here: <http://download.qt-project.org/official_releases/qt/5.3/5.3.2/qt-opensource-windows-x86-msvc2013_opengl-5.3.2.exe>
+#### Install Qt5.4
+Download Qt 5.4 from here: <http://download.qt-project.org/official_releases/qt/5.4/5.4.0/qt-opensource-windows-x86-msvc2013_opengl-5.4.0.exe>
   * The Qt variant should be for VS 2013, 32 bit (not 64) and include opengl.
 
 #### Build QGroundControl
@@ -104,16 +107,18 @@ Download Qt 5.3 from here: <http://download.qt-project.org/official_releases/qt/
 ### Additional build notes for all supported OS
 
 * Debug Builds: By default qmake will create makefiles for a release build. If you want a debug build add `CONFIG+=debug` to the command line.
-* Warnings as Errors: Specifying `CONFIG+=WarningsAsErrorsOn` will turn all warnings into errors which break the build. If you are working on a pull request you plan to submit to github for consideration, you should always run with this settings turned on, since it is required for all pull requests.
+* Warnings as Errors: Specifying `CONFIG+=WarningsAsErrorsOn` will turn all warnings into errors which break the build. If you are working on a pull request you plan to submit to github for consideration, you should always run with this settings turned on, since it is required for all pull requests. NOTE: Putting this line into a file called "user_config.pri" in the top-level directory will set this flag on all builds without interfering with the GIT history.
 * Parallel builds: For Linux and OSX you can use the '-j#' option to run parellel builds. On Windows parallel builds are on by default.
 * Location of built files: Individual build file results can be found in the `build_debug` or `build_release` directories. The built executable can be found in the `debug` or `release` directory.
 * Incremental builds: Incremental builds may not be 100% reliable. If you find something strange happening that seems like a bad build. Delete your `build_debug` and `build_release` directories and run qmake again.
 * Single release congfiguration on Windows: If you want to build a vs project that does not create both debug and release builds. Include `CONFIG-=debug_and_release` on the qmake command line plus either `CONFIG+=debug` or 
 `CONFIG+=release` depending on the build type you want.
 * Build using QtCreator: It is possible to build and debug using QtCreator as well. The above instructions should provide you with enough information to setup QtCreator on OSX and Linux. QtCreator on Windows is supposedly possible but we don't have any instructions available for that.
+* Google Earth is only supported on 32 bit builds, which by default means only Windows builds.
+* QGroundControl is using the Qt QLoggingCategory class for logging (<http://qt-project.org/doc/qt-5/qloggingcategory.html>). Since logging is on by default, an example qtlogging.ini file is included at the root of the repository which disables logging. Follow the instructions from Qt as to why and where to put this file. You can then edit the file to get a logging level that suits your needs.
 
 ## Additional functionality
-QGroundcontrol has functionality that is dependent on the operating system and libraries installed by the user. The following sections describe these features, their dependencies, and how to disable/alter them during the build process. These features can be forcibly enabled/disabled by specifying additional values for variables either at the command line when calling `qmake` or in the `user_config.pri`. When calling `qmake` additional variables can be set using the syntax `VARIABLE="SPACE_SEPARATED_VALUES"`, which can be repeated for multiple variables. For example: `qmake DEFINES="DISABLE_QUPGRADE DISABLE_SPEECH" MAVLINK_CONF="sensesoar"` disables the QUpgrade widget, speech functionality, and sets the MAVLink dialect to sensesoar. These values can be more permanently specified by setting them in the `user_config.pri` file in the root directly. Copy the `user_config.pri.dist` file and name the copy `user_config.pri`, uncommenting the lines with the variables to modify and set their values as you desire.
+QGroundcontrol has functionality that is dependent on the operating system and libraries installed by the user. The following sections describe these features, their dependencies, and how to disable/alter them during the build process. These features can be forcibly enabled/disabled by specifying additional values for variables either at the command line when calling `qmake` or in the `user_config.pri`. When calling `qmake` additional variables can be set using the syntax `VARIABLE="SPACE_SEPARATED_VALUES"`, which can be repeated for multiple variables. For example: `qmake DEFINES="DISABLE_QUPGRADE DISABLE_SPEECH" MAVLINK_CONF="sensesoar"` disables the QUpgrade widget, speech functionality, and sets the MAVLink dialect to sensesoar. These values can be more permanently specified by setting them in the `user_config.pri` file in the root directly. Create this file as a plain text file and ensure it ends in .pri (not .pri.txt!).
 
 **NOTE:** Any variables specified at the command line call to `qmake` will override those set in `user_config.pri`.
 

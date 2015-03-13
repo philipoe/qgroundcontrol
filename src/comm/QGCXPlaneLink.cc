@@ -39,7 +39,7 @@ This file is part of the QGROUNDCONTROL project
 #include <QHostInfo>
 #include "UAS.h"
 #include "UASInterface.h"
-#include "MainWindow.h"
+#include "QGCMessageBox.h"
 
 QGCXPlaneLink::QGCXPlaneLink(UASInterface* mav, QString remoteHost, QHostAddress localHost, quint16 localPort) :
     mav(mav),
@@ -92,7 +92,6 @@ void QGCXPlaneLink::loadSettings()
 {
     // Load defaults from settings
     QSettings settings;
-    settings.sync();
     settings.beginGroup("QGC_XPLANE_LINK");
     setRemoteHost(settings.value("REMOTE_HOST", QString("%1:%2").arg(remoteHost.toString()).arg(remotePort)).toString());
     setVersion(settings.value("XPLANE_VERSION", 10).toInt());
@@ -111,7 +110,6 @@ void QGCXPlaneLink::storeSettings()
     settings.setValue("AIRFRAME", airframeName);
     settings.setValue("SENSOR_HIL", _sensorHilEnabled);
     settings.endGroup();
-    settings.sync();
 }
 
 void QGCXPlaneLink::setVersion(const QString& version)
@@ -272,28 +270,34 @@ void QGCXPlaneLink::setPort(int localPort)
 
 void QGCXPlaneLink::processError(QProcess::ProcessError err)
 {
-    switch(err)
-    {
-    case QProcess::FailedToStart:
-        MainWindow::instance()->showCriticalMessage(tr("X-Plane Failed to Start"), tr("Please check if the path and command is correct"));
-        break;
-    case QProcess::Crashed:
-        MainWindow::instance()->showCriticalMessage(tr("X-Plane Crashed"), tr("This is a X-Plane-related problem. Please upgrade X-Plane"));
-        break;
-    case QProcess::Timedout:
-        MainWindow::instance()->showCriticalMessage(tr("X-Plane Start Timed Out"), tr("Please check if the path and command is correct"));
-        break;
-    case QProcess::WriteError:
-        MainWindow::instance()->showCriticalMessage(tr("Could not Communicate with X-Plane"), tr("Please check if the path and command is correct"));
-        break;
-    case QProcess::ReadError:
-        MainWindow::instance()->showCriticalMessage(tr("Could not Communicate with X-Plane"), tr("Please check if the path and command is correct"));
-        break;
-    case QProcess::UnknownError:
-    default:
-        MainWindow::instance()->showCriticalMessage(tr("X-Plane Error"), tr("Please check if the path and command is correct."));
-        break;
+    QString msg;
+    
+    switch(err) {
+        case QProcess::FailedToStart:
+            msg = tr("X-Plane Failed to start. Please check if the path and command is correct");
+            break;
+            
+        case QProcess::Crashed:
+            msg = tr("X-Plane crashed. This is an X-Plane-related problem, check for X-Plane upgrade.");
+            break;
+            
+        case QProcess::Timedout:
+            msg = tr("X-Plane start timed out. Please check if the path and command is correct");
+            break;
+            
+        case QProcess::ReadError:
+        case QProcess::WriteError:
+            msg = tr("Could not communicate with X-Plane. Please check if the path and command are correct");
+            break;
+            
+        case QProcess::UnknownError:
+        default:
+            msg = tr("X-Plane error occurred. Please check if the path and command is correct.");
+            break;
     }
+    
+    
+    QGCMessageBox::critical(tr("X-Plane HIL"), msg);
 }
 
 QString QGCXPlaneLink::getRemoteHost()
@@ -549,8 +553,12 @@ void QGCXPlaneLink::readBytes()
     quint16 senderPort;
 
     unsigned int s = socket->pendingDatagramSize();
-    if (s > maxLength) std::cerr << __FILE__ << __LINE__ << " UDP datagram overflow, allowed to read less bytes than datagram size" << std::endl;
+    if (s > maxLength) std::cerr << __FILE__ << __LINE__ << " UDP datagram overflow, allowed to read less bytes than datagram size: " << s << std::endl;
     socket->readDatagram(data, maxLength, &sender, &senderPort);
+    if (s > maxLength) {
+    	std::string headStr = std::string(data, data+5);
+    	std::cerr << __FILE__ << __LINE__ << " UDP datagram header: " << headStr << std::endl;
+    }
 
     // Calculate the number of data segments a 36 bytes
     // XPlane always has 5 bytes header: 'DATA@'
@@ -624,7 +632,8 @@ void QGCXPlaneLink::readBytes()
 
 				fields_changed |= (1 << 0) | (1 << 1) | (1 << 2);
             }
-            else if (p.index == 6 && xPlaneVersion == 10)
+            // atmospheric pressure aircraft for XPlane 9 and 10
+            else if (p.index == 6)
             {
                 // inHg to hPa (hecto Pascal / millibar)
                 abs_pressure = p.f[0] * 33.863886666718317f;
@@ -735,7 +744,7 @@ void QGCXPlaneLink::readBytes()
 				alt = p.f[2] * 0.3048f; // convert feet (MSL) to meters
 				alt_agl = p.f[3] * 0.3048f; //convert feet (AGL) to meters
             }
-            else if (p.index == 21 && xPlaneVersion == 10)
+            else if (p.index == 21)
             {
                 vy = p.f[3];
                 vx = -p.f[5];

@@ -118,7 +118,6 @@ UASView::UASView(UASInterface* uas, QWidget *parent) :
     connect(removeAction, SIGNAL(triggered()), this, SLOT(triggerUASDeletion()));
     connect(renameAction, SIGNAL(triggered()), this, SLOT(rename()));
     connect(selectAction, SIGNAL(triggered()), uas, SLOT(setSelected()));
-    connect(hilAction, SIGNAL(triggered(bool)), this, SLOT(showHILUi()));
     connect(selectAirframeAction, SIGNAL(triggered()), this, SLOT(selectAirframe()));
     connect(setBatterySpecsAction, SIGNAL(triggered()), this, SLOT(setBatterySpecs()));
 
@@ -230,49 +229,6 @@ void UASView::mouseDoubleClickEvent (QMouseEvent * event)
 {
     Q_UNUSED(event);
     UASManager::instance()->setActiveUAS(uas);
-    // qDebug() << __FILE__ << __LINE__ << "DOUBLECLICKED";
-}
-
-void UASView::enterEvent(QEvent* event)
-{
-    if (event->type() == QEvent::MouseMove)
-    {
-        emit uasInFocus(uas);
-        if (uas != UASManager::instance()->getActiveUAS())
-        {
-            grabMouse(QCursor(Qt::PointingHandCursor));
-        }
-    }
-
-    if (event->type() == QEvent::MouseButtonDblClick)
-    {
-        // qDebug() << __FILE__ << __LINE__ << "UAS CLICKED!";
-    }
-}
-
-void UASView::leaveEvent(QEvent* event)
-{
-    if (event->type() == QEvent::MouseMove)
-    {
-        emit uasOutFocus(uas);
-        releaseMouse();
-    }
-}
-
-void UASView::showEvent(QShowEvent* event)
-{
-    // React only to internal (pre-display)
-    // events
-    Q_UNUSED(event);
-    refreshTimer->start(updateInterval*10);
-}
-
-void UASView::hideEvent(QHideEvent* event)
-{
-    // React only to internal (pre-display)
-    // events
-    Q_UNUSED(event);
-   // refreshTimer->stop();
 }
 
 void UASView::receiveHeartbeat(UASInterface* uas)
@@ -478,16 +434,24 @@ void UASView::updateLoad(UASInterface* uas, double load)
     }
 }
 
+/**
+ * Right-clicking on the view provides a custom menu for interacting
+ * with the UAS.
+ */
 void UASView::contextMenuEvent (QContextMenuEvent* event)
 {
     QMenu menu(this);
     menu.addAction(selectAction);
     menu.addSeparator();
     menu.addAction(renameAction);
+/*
+    FIXME: The code below is incorrect. removeAction should only be available when link is
+            disconnected. fSee Issue #1275
     if (timeout)
     {
         menu.addAction(removeAction);
     }
+*/
     menu.addAction(hilAction);
     menu.addAction(selectAirframeAction);
     menu.addAction(setBatterySpecsAction);
@@ -551,11 +515,6 @@ void UASView::selectAirframe()
             uas->setAirframe(airframes.indexOf(item));
         }
     }
-}
-
-void UASView::showHILUi()
-{
-     MainWindow::instance()->showHILConfigurationWidget(uas);
 }
 
 void UASView::triggerUASDeletion()
@@ -715,11 +674,9 @@ void UASView::changeEvent(QEvent *e)
     }
 }
 
-/**
- * Implement paintEvent() so that stylesheets work for our custom widget.
- */
-void UASView::paintEvent(QPaintEvent *)
+void UASView::paintEvent(QPaintEvent *event)
 {
+    Q_UNUSED(event);
     QStyleOption opt;
     opt.init(this);
     QPainter p(this);

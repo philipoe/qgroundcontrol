@@ -23,10 +23,11 @@
 
 #include "QGCUASFileView.h"
 #include "uas/QGCUASFileManager.h"
+#include "QGCFileDialog.h"
 
 #include <QFileDialog>
 #include <QDir>
-#include <QMessageBox>
+#include <QDebug>
 
 QGCUASFileView::QGCUASFileView(QWidget *parent, QGCUASFileManager *manager) :
     QWidget(parent),
@@ -58,10 +59,10 @@ void QGCUASFileView::_downloadFile(void)
     
     _ui.statusText->clear();
     
-    QString downloadToHere = QFileDialog::getExistingDirectory(this, tr("Download Directory"),
+    QString downloadToHere = QGCFileDialog::getExistingDirectory(this, tr("Download Directory"),
                                                                QDir::homePath(),
-                                                               QFileDialog::ShowDirsOnly
-                                                               | QFileDialog::DontResolveSymlinks);
+                                                               QGCFileDialog::ShowDirsOnly
+                                                               | QGCFileDialog::DontResolveSymlinks);
     
     // And now download to this location
     QString path;

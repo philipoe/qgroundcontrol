@@ -184,9 +184,8 @@ void UASParameterDataModel::handleParamUpdate(int compId, const QString &paramNa
         }
     }
 
-    emit parameterUpdated(compId,paramName,value);
     setOnboardParam(compId,paramName,value);
-
+    emit parameterUpdated(compId,paramName,value);
 }
 
 bool UASParameterDataModel::getOnboardParamValue(int componentId, const QString& key, QVariant& value) const
@@ -480,7 +479,7 @@ void UASParameterDataModel::loadParamMetaInfoFromStream(QTextStream& stream)
         {
             // tooltip
             paramDescriptions.insert(parts.at(0).trimmed(), parts.at(6).trimmed());
-            qDebug() << "PARAM META:" << parts.at(0).trimmed();
+            //qDebug() << "PARAM META:" << parts.at(0).trimmed();
         }
     }
 }

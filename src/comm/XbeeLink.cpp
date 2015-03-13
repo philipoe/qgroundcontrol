@@ -35,7 +35,7 @@ XbeeLink::~XbeeLink()
 		delete m_portName;
 		m_portName = NULL;
 	}
-	this->disconnect();
+	_disconnect();
 }
 
 QString XbeeLink::getPortName() const
@@ -58,7 +58,7 @@ bool XbeeLink::setPortName(QString portName)
 	bool reconnect(false);
 	if(this->m_connected)
 	{
-		this->disconnect();
+		_disconnect();
 		reconnect = true;
 	}
 	if(m_portName)
@@ -87,7 +87,7 @@ bool XbeeLink::setPortName(QString portName)
 	bool retVal(true);
 	if(reconnect)
 	{
-		retVal = this->connect();
+		retVal = _connect();
 	}
 
 	return retVal;
@@ -98,14 +98,14 @@ bool XbeeLink::setBaudRate(int rate)
 	bool reconnect(false);
 	if(this->m_connected)
 	{
-		this->disconnect();
+		_disconnect();
 		reconnect = true;
 	}
 	bool retVal(true);
 	this->m_baudRate = rate;
 	if(reconnect)
 	{
-		retVal = this->connect();
+		retVal = _connect();
 	}
 	return retVal;
 }
@@ -145,7 +145,7 @@ bool XbeeLink::hardwareConnect()
 	emit tryConnectBegin(true);
 	if(this->isConnected())
 	{
-		this->disconnect();
+		_disconnect();
 	}
 	if (*this->m_portName == '\0')
 	{
@@ -162,18 +162,17 @@ bool XbeeLink::hardwareConnect()
 	emit tryConnectEnd(true);
 	this->m_connected = true;
 	emit connected();
-	emit connected(true);
 	return true;
 }
 
-bool XbeeLink::connect()
+bool XbeeLink::_connect(void)
 {
-	if (this->isRunning()) this->disconnect();
+	if (this->isRunning()) _disconnect();
     this->start(LowPriority);
     return true;
 }
 
-bool XbeeLink::disconnect()
+bool XbeeLink::_disconnect(void)
 {
 	if(this->isRunning()) this->terminate(); //stop running the thread, restart it upon connect
 
@@ -185,7 +184,6 @@ bool XbeeLink::disconnect()
 	this->m_connected = false;
 
 	emit disconnected();
-	emit connected(false);
 	return true;
 }
 
@@ -205,8 +203,8 @@ void XbeeLink::writeBytes(const char *bytes, qint64 length)  // TO DO: delete th
 	}
 	else
 	{
-		this->disconnect();
-		emit communicationError(this->getName(), tr("Could not send data - link %1 is disconnected!").arg(this->getName()));
+		_disconnect();
+		emit communicationError(tr("Link Error"), QString("Error on link: %1. Could not send data - link is disconnected!").arg(getName()));
 	}
 }
 

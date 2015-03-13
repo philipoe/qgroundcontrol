@@ -13,7 +13,6 @@
 #include <QDebug>
 #include <QTime>
 #include <QApplication>
-#include <QMessageBox>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QtEndian>
@@ -24,27 +23,28 @@
 #include "UASManager.h"
 #include "UASInterface.h"
 #include "UAS.h"
-#include "PxQuadMAV.h"
 #include "configuration.h"
 #include "LinkManager.h"
 #include "QGCMAVLink.h"
 #include "QGCMAVLinkUASFactory.h"
 #include "QGC.h"
+#include "QGCApplication.h"
 
 Q_DECLARE_METATYPE(mavlink_message_t)
+IMPLEMENT_QGC_SINGLETON(MAVLinkProtocol, MAVLinkProtocol)
+Q_LOGGING_CATEGORY(MAVLinkProtocolLog, "MAVLinkProtocolLog")
+
+const char* MAVLinkProtocol::_tempLogFileTemplate = "FlightDataXXXXXX"; ///< Template for temporary log file
+const char* MAVLinkProtocol::_logFileExtension = "mavlink";             ///< Extension for log files
 
 /**
  * The default constructor will create a new MAVLink object sending heartbeats at
  * the MAVLINK_HEARTBEAT_DEFAULT_RATE to all connected links.
  */
-MAVLinkProtocol::MAVLinkProtocol() :
-    heartbeatTimer(NULL),
-    heartbeatRate(MAVLINK_HEARTBEAT_DEFAULT_RATE),
-    m_heartbeatsEnabled(true),
+MAVLinkProtocol::MAVLinkProtocol(QObject* parent) :
+    QGCSingleton(parent),
     m_multiplexingEnabled(false),
     m_authEnabled(false),
-    m_loggingEnabled(false),
-    m_logfile(NULL),
     m_enable_version_check(true),
     m_paramRetransmissionTimeout(350),
     m_paramRewriteTimeout(500),
@@ -53,13 +53,17 @@ MAVLinkProtocol::MAVLinkProtocol() :
     m_actionRetransmissionTimeout(100),
     versionMismatchIgnore(false),
     systemId(QGC::defaultSystemId),
-    _should_exit(false)
+    _logSuspendError(false),
+    _logSuspendReplay(false),
+    _tempLogFile(QString("%2.%3").arg(_tempLogFileTemplate).arg(_logFileExtension)),
+    _linkMgr(LinkManager::instance()),
+    _heartbeatRate(MAVLINK_HEARTBEAT_DEFAULT_RATE),
+    _heartbeatsEnabled(true)
 {
     qRegisterMetaType<mavlink_message_t>("mavlink_message_t");
-
+    
     m_authKey = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
     loadSettings();
-    moveToThread(this);
 
     // All the *Counter variables are not initialized here, as they should be initialized
     // on a per-link basis before those links are used. @see resetMetadataForLink().
@@ -72,33 +76,32 @@ MAVLinkProtocol::MAVLinkProtocol() :
             lastIndex[i][j] = -1;
         }
     }
+    
+    // Start heartbeat timer, emitting a heartbeat at the configured rate
+    connect(&_heartbeatTimer, &QTimer::timeout, this, &MAVLinkProtocol::sendHeartbeat);
+    _heartbeatTimer.start(1000/_heartbeatRate);
 
-    start(QThread::HighPriority);
+    connect(this, &MAVLinkProtocol::protocolStatusMessage, qgcApp(), &QGCApplication::criticalMessageBoxOnMainThread);
+    connect(this, &MAVLinkProtocol::saveTempFlightDataLog, qgcApp(), &QGCApplication::saveTempFlightDataLogOnMainThread);
 
     emit versionCheckChanged(m_enable_version_check);
+}
+
+MAVLinkProtocol::~MAVLinkProtocol()
+{
+    storeSettings();
+    
+    _closeLogFile();
 }
 
 void MAVLinkProtocol::loadSettings()
 {
     // Load defaults from settings
     QSettings settings;
-    settings.sync();
     settings.beginGroup("QGC_MAVLINK_PROTOCOL");
-    enableHeartbeats(settings.value("HEARTBEATS_ENABLED", m_heartbeatsEnabled).toBool());
+    enableHeartbeats(settings.value("HEARTBEATS_ENABLED", _heartbeatsEnabled).toBool());
     enableVersionCheck(settings.value("VERSION_CHECK_ENABLED", m_enable_version_check).toBool());
     enableMultiplexing(settings.value("MULTIPLEXING_ENABLED", m_multiplexingEnabled).toBool());
-
-    // Only set logfile if there is a name present in settings
-    if (settings.contains("LOGFILE_NAME") && m_logfile == NULL)
-    {
-        m_logfile = new QFile(settings.value("LOGFILE_NAME").toString());
-    }
-    else if (m_logfile == NULL)
-    {
-        m_logfile = new QFile(QStandardPaths::writableLocation(QStandardPaths::HomeLocation) + "/qgroundcontrol_packetlog.mavlink");
-    }
-    // Enable logging
-    enableLogging(settings.value("LOGGING_ENABLED", m_loggingEnabled).toBool());
 
     // Only set system id if it was valid
     int temp = settings.value("GCS_SYSTEM_ID", systemId).toInt();
@@ -126,82 +129,17 @@ void MAVLinkProtocol::storeSettings()
     // Store settings
     QSettings settings;
     settings.beginGroup("QGC_MAVLINK_PROTOCOL");
-    settings.setValue("HEARTBEATS_ENABLED", m_heartbeatsEnabled);
-    settings.setValue("LOGGING_ENABLED", m_loggingEnabled);
+    settings.setValue("HEARTBEATS_ENABLED", _heartbeatsEnabled);
     settings.setValue("VERSION_CHECK_ENABLED", m_enable_version_check);
     settings.setValue("MULTIPLEXING_ENABLED", m_multiplexingEnabled);
     settings.setValue("GCS_SYSTEM_ID", systemId);
     settings.setValue("GCS_AUTH_KEY", m_authKey);
     settings.setValue("GCS_AUTH_ENABLED", m_authEnabled);
-    if (m_logfile)
-    {
-        // Logfile exists, store the name
-        settings.setValue("LOGFILE_NAME", m_logfile->fileName());
-    }
     // Parameter interface settings
     settings.setValue("PARAMETER_RETRANSMISSION_TIMEOUT", m_paramRetransmissionTimeout);
     settings.setValue("PARAMETER_REWRITE_TIMEOUT", m_paramRewriteTimeout);
     settings.setValue("PARAMETER_TRANSMISSION_GUARD_ENABLED", m_paramGuardEnabled);
     settings.endGroup();
-    settings.sync();
-    //qDebug() << "Storing settings!";
-}
-
-MAVLinkProtocol::~MAVLinkProtocol()
-{
-    storeSettings();
-    if (m_logfile)
-    {
-        if (m_logfile->isOpen())
-        {
-            m_logfile->flush();
-            m_logfile->close();
-        }
-        delete m_logfile;
-        m_logfile = NULL;
-    }
-
-    // Tell the thread to exit
-    _should_exit = true;
-    // Wait for it to exit
-    wait();
-}
-
-/**
- * @brief Runs the thread
- *
- **/
-void MAVLinkProtocol::run()
-{
-    heartbeatTimer = new QTimer();
-    heartbeatTimer->moveToThread(this);
-    // Start heartbeat timer, emitting a heartbeat at the configured rate
-    connect(heartbeatTimer, SIGNAL(timeout()), this, SLOT(sendHeartbeat()));
-    heartbeatTimer->start(1000/heartbeatRate);
-
-    while(!_should_exit) {
-
-        if (isFinished()) {
-            delete heartbeatTimer;
-            qDebug() << "MAVLINK WORKER DONE!";
-            return;
-        }
-
-        QCoreApplication::processEvents();
-        QGC::SLEEP::msleep(2);
-    }
-}
-
-QString MAVLinkProtocol::getLogfileName()
-{
-    if (m_logfile)
-    {
-        return m_logfile->fileName();
-    }
-    else
-    {
-        return QStandardPaths::writableLocation(QStandardPaths::HomeLocation) + "/qgroundcontrol_packetlog.mavlink";
-    }
 }
 
 void MAVLinkProtocol::resetMetadataForLink(const LinkInterface *link)
@@ -214,20 +152,51 @@ void MAVLinkProtocol::resetMetadataForLink(const LinkInterface *link)
     currLossCounter[linkId] = 0;
 }
 
-void MAVLinkProtocol::linkStatusChanged(bool connected)
+void MAVLinkProtocol::linkConnected(void)
 {
     LinkInterface* link = qobject_cast<LinkInterface*>(QObject::sender());
+    Q_ASSERT(link);
+    
+    _linkStatusChanged(link, true);
+}
 
-    if (link) {
-        if (connected) {
-            // Send command to start MAVLink
-            // XXX hacky but safe
-            // Start NSH
-            const char init[] = {0x0d, 0x0d, 0x0d};
-            link->writeBytes(init, sizeof(init));
-            const char* cmd = "sh /etc/init.d/rc.usb\n";
-            link->writeBytes(cmd, strlen(cmd));
-            link->writeBytes(init, 4);
+void MAVLinkProtocol::linkDisconnected(void)
+{
+    LinkInterface* link = qobject_cast<LinkInterface*>(QObject::sender());
+    Q_ASSERT(link);
+    
+    _linkStatusChanged(link, false);
+}
+
+void MAVLinkProtocol::_linkStatusChanged(LinkInterface* link, bool connected)
+{
+    qCDebug(MAVLinkProtocolLog) << "_linkStatusChanged" << QString("%1").arg((long)link, 0, 16) << connected;
+    Q_ASSERT(link);
+    
+    if (connected) {
+        Q_ASSERT(!_connectedLinks.contains(link));
+        _connectedLinks.append(link);
+        
+        if (_connectedLinks.count() == 1) {
+            // This is the first link, we need to start logging
+            _startLogging();
+        }
+        
+        // Send command to start MAVLink
+        // XXX hacky but safe
+        // Start NSH
+        const char init[] = {0x0d, 0x0d, 0x0d};
+        link->writeBytes(init, sizeof(init));
+        const char* cmd = "sh /etc/init.d/rc.usb\n";
+        link->writeBytes(cmd, strlen(cmd));
+        link->writeBytes(init, 4);
+    } else {
+        Q_ASSERT(_connectedLinks.contains(link));
+        _connectedLinks.removeOne(link);
+        
+        if (_connectedLinks.count() == 0) {
+            // Last link is gone, close out logging
+            _stopLogging();
         }
     }
 }
@@ -265,7 +234,10 @@ void MAVLinkProtocol::receiveBytes(LinkInterface* link, QByteArray b)
             warnedUser = true;
             // Obviously the user tries to use a 0.9 autopilot
             // with QGroundControl built for version 1.0
-            emit protocolStatusMessage("MAVLink Version or Baud Rate Mismatch", "Your MAVLink device seems to use the deprecated version 0.9, while QGroundControl only supports version 1.0+. Please upgrade the MAVLink version of your autopilot. If your autopilot is using version 1.0, check if the baud rates of QGroundControl and your autopilot are the same.");
+            emit protocolStatusMessage(tr("MAVLink Protocol"), tr("There is a MAVLink Version or Baud Rate Mismatch. "
+                                                                  "Your MAVLink device seems to use the deprecated version 0.9, while QGroundControl only supports version 1.0+. "
+                                                                  "Please upgrade the MAVLink version of your autopilot. "
+                                                                  "If your autopilot is using version 1.0, check if the baud rates of QGroundControl and your autopilot are the same."));
         }
 
         if (decodeState == 0 && !decodedFirstPacket)
@@ -282,7 +254,8 @@ void MAVLinkProtocol::receiveBytes(LinkInterface* link, QByteArray b)
                 else
                 {
                     warnedUserNonMavlink = true;
-                    emit protocolStatusMessage("MAVLink Baud Rate Mismatch", "Please check if the baud rates of QGroundControl and your autopilot are the same.");
+                    emit protocolStatusMessage(tr("MAVLink Protocol"), tr("There is a MAVLink Version or Baud Rate Mismatch. "
+                                                                          "Please check if the baud rates of QGroundControl and your autopilot are the same."));
                 }
             }
         }
@@ -314,8 +287,8 @@ void MAVLinkProtocol::receiveBytes(LinkInterface* link, QByteArray b)
             }
 
             // Log data
-            if (m_loggingEnabled && m_logfile)
-            {
+            
+            if (!_logSuspendError && !_logSuspendReplay && _tempLogFile.isOpen()) {
                 uint8_t buf[MAVLINK_MAX_PACKET_LEN+sizeof(quint64)];
 
                 // Write the uint64 time in microseconds in big endian format before the message.
@@ -332,11 +305,12 @@ void MAVLinkProtocol::receiveBytes(LinkInterface* link, QByteArray b)
 
                 // Now write this timestamp/message pair to the log.
                 QByteArray b((const char*)buf, len);
-                if(m_logfile->write(b) != len)
+                if(_tempLogFile.write(b) != len)
                 {
                     // If there's an error logging data, raise an alert and stop logging.
-                    emit protocolStatusMessage(tr("MAVLink Logging failed"), tr("Could not write to file %1, disabling logging.").arg(m_logfile->fileName()));
-                    enableLogging(false);
+                    emit protocolStatusMessage(tr("MAVLink Protocol"), tr("MAVLink Logging failed. Could not write to file %1, logging disabled.").arg(_tempLogFile.fileName()));
+                    _stopLogging();
+                    _logSuspendError = true;
                 }
             }
 
@@ -358,7 +332,7 @@ void MAVLinkProtocol::receiveBytes(LinkInterface* link, QByteArray b)
                 // Check if the UAS has the same id like this system
                 if (message.sysid == getSystemId())
                 {
-                    emit protocolStatusMessage(tr("SYSTEM ID CONFLICT!"), tr("Warning: A second system is using the same system id (%1)").arg(getSystemId()));
+                    emit protocolStatusMessage(tr("MAVLink Protocol"), tr("Warning: A second system is using the same system id (%1)").arg(getSystemId()));
                 }
 
                 // Create a new UAS based on the heartbeat received
@@ -378,8 +352,9 @@ void MAVLinkProtocol::receiveBytes(LinkInterface* link, QByteArray b)
                     // Bring up dialog to inform user
                     if (!versionMismatchIgnore)
                     {
-                        emit protocolStatusMessage(tr("The MAVLink protocol version on the MAV and QGroundControl mismatch!"),
-                                                   tr("It is unsafe to use different MAVLink versions. QGroundControl therefore refuses to connect to system %1, which sends MAVLink version %2 (QGroundControl uses version %3).").arg(message.sysid).arg(heartbeat.mavlink_version).arg(MAVLINK_VERSION));
+                        emit protocolStatusMessage(tr("MAVLink Protocol"), tr("The MAVLink protocol version on the MAV and QGroundControl mismatch! "
+                                                                              "It is unsafe to use different MAVLink versions. "
+                                                                              "QGroundControl therefore refuses to connect to system %1, which sends MAVLink version %2 (QGroundControl uses version %3).").arg(message.sysid).arg(heartbeat.mavlink_version).arg(MAVLINK_VERSION));
                         versionMismatchIgnore = true;
                     }
 
@@ -443,7 +418,7 @@ void MAVLinkProtocol::receiveBytes(LinkInterface* link, QByteArray b)
             if (m_multiplexingEnabled)
             {
                 // Get all links connected to this unit
-                QList<LinkInterface*> links = LinkManager::instance()->getLinksForProtocol(this);
+                QList<LinkInterface*> links = _linkMgr->getLinks();
 
                 // Emit message on all links that are currently connected
                 foreach (LinkInterface* currLink, links)
@@ -488,7 +463,7 @@ int MAVLinkProtocol::getComponentId()
 void MAVLinkProtocol::sendMessage(mavlink_message_t message)
 {
     // Get all links connected to this unit
-    QList<LinkInterface*> links = LinkManager::instance()->getLinksForProtocol(this);
+    QList<LinkInterface*> links = _linkMgr->getLinks();
 
     // Emit message on all links that are currently connected
     QList<LinkInterface*>::iterator i;
@@ -550,7 +525,7 @@ void MAVLinkProtocol::sendMessage(LinkInterface* link, mavlink_message_t message
  */
 void MAVLinkProtocol::sendHeartbeat()
 {
-    if (m_heartbeatsEnabled)
+    if (_heartbeatsEnabled)
     {
         mavlink_message_t beat;
         mavlink_msg_heartbeat_pack(getSystemId(), getComponentId(),&beat, MAV_TYPE_GCS, MAV_AUTOPILOT_INVALID, MAV_MODE_MANUAL_ARMED, 0, MAV_STATE_ACTIVE);
@@ -567,10 +542,10 @@ void MAVLinkProtocol::sendHeartbeat()
     }
 }
 
-/** @param enabled true to enable heartbeats emission at heartbeatRate, false to disable */
+/** @param enabled true to enable heartbeats emission at _heartbeatRate, false to disable */
 void MAVLinkProtocol::enableHeartbeats(bool enabled)
 {
-    m_heartbeatsEnabled = enabled;
+    _heartbeatsEnabled = enabled;
     emit heartbeatChanged(enabled);
 }
 
@@ -633,62 +608,6 @@ void MAVLinkProtocol::setActionRetransmissionTimeout(int ms)
     }
 }
 
-void MAVLinkProtocol::enableLogging(bool enabled)
-{
-    bool changed = false;
-    if (enabled != m_loggingEnabled) changed = true;
-
-    if (enabled)
-    {
-        if (m_logfile && m_logfile->isOpen())
-        {
-            m_logfile->flush();
-            m_logfile->close();
-        }
-
-        if (m_logfile)
-        {
-            if (!m_logfile->open(QIODevice::WriteOnly | QIODevice::Append))
-            {
-                emit protocolStatusMessage(tr("Opening MAVLink logfile for writing failed"), tr("MAVLink cannot log to the file %1, please choose a different file. Stopping logging.").arg(m_logfile->fileName()));
-                m_loggingEnabled = false;
-            }
-        }
-        else
-        {
-            emit protocolStatusMessage(tr("Opening MAVLink logfile for writing failed"), tr("MAVLink cannot start logging, no logfile selected."));
-        }
-    }
-    else if (!enabled)
-    {
-        if (m_logfile)
-        {
-            if (m_logfile->isOpen())
-            {
-                m_logfile->flush();
-                m_logfile->close();
-            }
-        }
-    }
-    m_loggingEnabled = enabled;
-    if (changed) emit loggingChanged(enabled);
-}
-
-void MAVLinkProtocol::setLogfileName(const QString& filename)
-{
-    if (!m_logfile)
-    {
-        m_logfile = new QFile(filename);
-    }
-    else
-    {
-        m_logfile->flush();
-        m_logfile->close();
-    }
-    m_logfile->setFileName(filename);
-    enableLogging(m_loggingEnabled);
-}
-
 void MAVLinkProtocol::enableVersionCheck(bool enabled)
 {
     m_enable_version_check = enabled;
@@ -702,12 +621,106 @@ void MAVLinkProtocol::enableVersionCheck(bool enabled)
  */
 void MAVLinkProtocol::setHeartbeatRate(int rate)
 {
-    heartbeatRate = rate;
-    heartbeatTimer->setInterval(1000/heartbeatRate);
+    _heartbeatRate = rate;
+    _heartbeatTimer.setInterval(1000/_heartbeatRate);
 }
 
 /** @return heartbeat rate in Hertz */
 int MAVLinkProtocol::getHeartbeatRate()
 {
-    return heartbeatRate;
+    return _heartbeatRate;
+}
+
+/// @brief Closes the log file if it is open
+bool MAVLinkProtocol::_closeLogFile(void)
+{
+    if (_tempLogFile.isOpen()) {
+        if (_tempLogFile.size() == 0) {
+            // Don't save zero byte files
+            _tempLogFile.remove();
+            return false;
+        } else {
+            _tempLogFile.flush();
+            _tempLogFile.close();
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+void MAVLinkProtocol::_startLogging(void)
+{
+    Q_ASSERT(!_tempLogFile.isOpen());
+
+    if (!_logSuspendReplay) {
+        if (!_tempLogFile.open()) {
+            emit protocolStatusMessage(tr("MAVLink Protocol"), tr("Opening Flight Data file for writing failed. "
+                                                                  "Unable to write to %1. Please choose a different file location.").arg(_tempLogFile.fileName()));
+            _closeLogFile();
+            _logSuspendError = true;
+            return;
+        }
+    
+        qDebug() << "Temp log" << _tempLogFile.fileName();
+        
+        _logSuspendError = false;
+    }
+}
+
+void MAVLinkProtocol::_stopLogging(void)
+{
+    if (_closeLogFile()) {
+        // If the signals are not connected it means we are running a unit test. In that case just delete log files
+        if (qgcApp()->promptFlightDataSave()) {
+            emit saveTempFlightDataLog(_tempLogFile.fileName());
+        } else {
+            QFile::remove(_tempLogFile.fileName());
+        }
+    }
+}
+
+/// @brief Checks the temp directory for log files which may have been left there.
+///         This could happen if QGC crashes without the temp log file being saved.
+///         Give the user an option to save these orphaned files.
+void MAVLinkProtocol::checkForLostLogFiles(void)
+{
+    QDir tempDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation));
+    
+    QString filter(QString("*.%1").arg(_logFileExtension));
+    QFileInfoList fileInfoList = tempDir.entryInfoList(QStringList(filter), QDir::Files);
+    qDebug() << "Orphaned log file count" << fileInfoList.count();
+    
+    foreach(const QFileInfo fileInfo, fileInfoList) {
+        qDebug() << "Orphaned log file" << fileInfo.filePath();
+        if (fileInfo.size() == 0) {
+            // Delete all zero length files
+            QFile::remove(fileInfo.filePath());
+            continue;
+        }
+
+        // Give the user a chance to save the orphaned log file
+        emit protocolStatusMessage(tr("Found unsaved Flight Data"),
+                                   tr("This can happen if QGroundControl crashes during Flight Data collection. "
+                                      "If you want to save the unsaved Flight Data, select the file you want to save it to. "
+                                      "If you do not want to keep the Flight Data, select 'Cancel' on the next dialog."));
+        emit saveTempFlightDataLog(fileInfo.filePath());
+    }
+}
+
+void MAVLinkProtocol::suspendLogForReplay(bool suspend)
+{
+    _logSuspendReplay = suspend;
+}
+
+void MAVLinkProtocol::deleteTempLogFiles(void)
+{
+    QDir tempDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation));
+    
+    QString filter(QString("*.%1").arg(_logFileExtension));
+    QFileInfoList fileInfoList = tempDir.entryInfoList(QStringList(filter), QDir::Files);
+    
+    foreach(const QFileInfo fileInfo, fileInfoList) {
+        QFile::remove(fileInfo.filePath());
+    }
 }

@@ -43,7 +43,6 @@ This file is part of the QGROUNDCONTROL project
 #include "UASParameterDataModel.h"
 #include "UASWaypointManager.h"
 #include "QGCUASParamManagerInterface.h"
-#include "RadioCalibration/RadioCalibrationData.h"
 
 class QGCUASFileManager;
 
@@ -104,7 +103,7 @@ public:
     /** @brief Get short mode */
     virtual const QString& getShortMode() const = 0;
     /** @brief Translate mode id into text */
-    static QString getShortModeTextFor(int id);
+    virtual QString getShortModeTextFor(uint8_t base_mode, uint32_t custom_mode) const = 0;
     //virtual QColor getColor() = 0;
     virtual int getUASID() const = 0; ///< Get the ID of the connected UAS
     /** @brief The time interval the robot is switched on **/
@@ -188,7 +187,7 @@ public:
          *         based on the fact that a message for this robot has been received through that
          *         interface. The LinkInterface can support multiple protocols.
          **/
-    virtual QList<LinkInterface*>* getLinks() = 0;
+    virtual QList<LinkInterface*> getLinks() = 0;
 
     /**
      * @brief Get the color for this UAS
@@ -200,32 +199,32 @@ public:
      */
     static QColor getNextColor() {
         /* Create color map */
-        static QList<QColor> colors = QList<QColor>() 
-		<< QColor(231,72,28) 
-		<< QColor(104,64,240) 
-		<< QColor(203,254,121) 
+        static QList<QColor> colors = QList<QColor>()
+		<< QColor(231,72,28)
+		<< QColor(104,64,240)
+		<< QColor(203,254,121)
 		<< QColor(161,252,116)
-               	<< QColor(232,33,47) 
-		<< QColor(116,251,110) 
-		<< QColor(234,38,107) 
+               	<< QColor(232,33,47)
+		<< QColor(116,251,110)
+		<< QColor(234,38,107)
 		<< QColor(104,250,138)
-                << QColor(235,43,165) 
-		<< QColor(98,248,176) 
-		<< QColor(236,48,221) 
+                << QColor(235,43,165)
+		<< QColor(98,248,176)
+		<< QColor(236,48,221)
 		<< QColor(92,247,217)
-                << QColor(200,54,238) 
-		<< QColor(87,231,246) 
-		<< QColor(151,59,239) 
+                << QColor(200,54,238)
+		<< QColor(87,231,246)
+		<< QColor(151,59,239)
 		<< QColor(81,183,244)
-                << QColor(75,133,243) 
-		<< QColor(242,255,128) 
+                << QColor(75,133,243)
+		<< QColor(242,255,128)
 		<< QColor(230,126,23);
-        
+
         static int nextColor = -1;
         if(nextColor == 18){//if at the end of the list
             nextColor = -1;//go back to the beginning
         }
-        nextColor++; 
+        nextColor++;
         return colors[nextColor];//return the next color
    }
 
@@ -316,8 +315,6 @@ public slots:
     virtual void setLocalOriginAtCurrentGPSPosition() = 0;
     /** @brief Set world frame origin / home position at this GPS position */
     virtual void setHomePosition(double lat, double lon, double alt) = 0;
-    /** @brief Request all onboard parameters of all components */
-    virtual void requestParameters() = 0;
     /** @brief Request one specific onboard parameter */
     virtual void requestParameter(int component, const QString& parameter) = 0;
     /** @brief Write parameter to permanent storage */
@@ -393,6 +390,12 @@ public slots:
     /** @brief Send Optical Flow sensor message for HIL, (arguments and units accoding to mavlink documentation*/
     virtual void sendHilOpticalFlow(quint64 time_us, qint16 flow_x, qint16 flow_y, float flow_comp_m_x,
                             float flow_comp_m_y, quint8 quality, float ground_distance) = 0;
+
+    /** @brief Send command to map a RC channel to a parameter */
+    virtual void sendMapRCToParam(QString param_id, float scale, float value0, quint8 param_rc_channel_index, float valueMin, float valueMax) = 0;
+
+    /** @brief Send command to disable all bindings/maps between RC and parameters */
+    virtual void unsetRCToParameterMap() = 0;
 
 protected:
     QColor color;
@@ -504,6 +507,7 @@ signals:
     void autoModeChanged(bool autoMode);
     void parameterChanged(int uas, int component, QString parameterName, QVariant value);
     void parameterChanged(int uas, int component, int parameterCount, int parameterId, QString parameterName, QVariant value);
+    void parameterUpdate(int uas, int component, QString parameterName, int type, QVariant value);
     void patternDetected(int uasId, QString patternPath, float confidence, bool detected);
     void letterDetected(int uasId, QString letter, float confidence, bool detected);
     /**
@@ -584,8 +588,6 @@ signals:
     void remoteControlChannelScaledChanged(int channelId, float normalized);
     /** @brief Remote control RSSI changed */
     void remoteControlRSSIChanged(float rssi);
-    /** @brief Radio Calibration Data has been received from the MAV*/
-    void radioCalibrationReceived(const QPointer<RadioCalibrationData>&);
 
     /**
      * @brief Localization quality changed

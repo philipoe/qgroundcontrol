@@ -142,7 +142,7 @@ void QGCPX4SensorCalibration::parameterChanged(int uas, int component, QString p
     }
 
     // Check mag calibration naively
-    if (parameterName.contains("SENS_MAG_XOFF")) {
+    if (parameterName.contains("SENS_MAG_XOFF") || parameterName.contains("CAL_MAG0_ID")) {
         float offset = value.toFloat();
         if (offset < 0.000001f && offset > -0.000001f) {
             // Must be zero, not good
@@ -153,7 +153,7 @@ void QGCPX4SensorCalibration::parameterChanged(int uas, int component, QString p
     }
 
     // Check gyro calibration naively
-    if (parameterName.contains("SENS_GYRO_XOFF")) {
+    if (parameterName.contains("SENS_GYRO_XOFF") || parameterName.contains("CAL_GYRO0_ID")) {
         float offset = value.toFloat();
         if (offset < 0.000001f && offset > -0.000001f) {
             // Must be zero, not good
@@ -164,7 +164,7 @@ void QGCPX4SensorCalibration::parameterChanged(int uas, int component, QString p
     }
 
     // Check accel calibration naively
-    if (parameterName.contains("SENS_ACC_XOFF")) {
+    if (parameterName.contains("SENS_ACC_XOFF") || parameterName.contains("CAL_ACC0_ID")) {
         float offset = value.toFloat();
         if (offset < 0.000001f && offset > -0.000001f) {
             // Must be zero, not good
@@ -258,7 +258,9 @@ void QGCPX4SensorCalibration::setInstructionImage(const QString &path)
 
 void QGCPX4SensorCalibration::setAutopilotImage(int index)
 {
-    setAutopilotImage(QString(":/files/images/px4/calibration/pixhawk_%1.png").arg(index, 2, 10, QChar('0')));
+    Q_UNUSED(index);
+    // FIXME: This was referencing a non-existent png. Need to figure out what this was trying to do.
+    //setAutopilotImage(QString(":/files/images/px4/calibration/pixhawk_%1.png").arg(index, 2, 10, QChar('0')));
 }
 
 void QGCPX4SensorCalibration::setGpsImage(int index)
@@ -348,6 +350,11 @@ void QGCPX4SensorCalibration::setActiveUAS(UASInterface* uas)
     activeUAS = uas;
 
     updateSystemSpecs(uas->getUASID());
+    
+    // If the parameters are ready, we aren't going to get paramterChanged signals. So re-request them in order to make the UI work.
+    if (uas->getParamManager()->parametersReady()) {
+        _requestAllSensorParameters();
+    }
 }
 
 void QGCPX4SensorCalibration::updateSystemSpecs(int id)
@@ -385,13 +392,13 @@ void QGCPX4SensorCalibration::handleTextMessage(int uasid, int compId, int sever
 
     ui->instructionLabel->setText(QString("%1").arg(text));
 
-    if (text.startsWith("accel measurement started: ")) {
-        QString axis = text.split("measurement started: ").last().left(2);
+    if (text.startsWith("Hold still, starting to measure ")) {
+        QString axis = text.section(" ", -2, -2);
         setInstructionImage(QString(":/files/images/px4/calibration/accel_%1.png").arg(axis));
     }
 
-    if (text.startsWith("directions left: ")) {
-        QString axis = text.split("directions left: ").last().left(2);
+    if (text.startsWith("pending: ")) {
+        QString axis = text.section(" ", 1, 1);
         setInstructionImage(QString(":/files/images/px4/calibration/accel_%1.png").arg(axis));
     }
 
@@ -410,38 +417,7 @@ void QGCPX4SensorCalibration::handleTextMessage(int uasid, int compId, int sever
         }
 
         if (activeUAS) {
-            if (text.startsWith("accel ")) {
-                activeUAS->requestParameter(0, "SENS_ACC_XOFF");
-                activeUAS->requestParameter(0, "SENS_ACC_YOFF");
-                activeUAS->requestParameter(0, "SENS_ACC_ZOFF");
-                activeUAS->requestParameter(0, "SENS_ACC_XSCALE");
-                activeUAS->requestParameter(0, "SENS_ACC_YSCALE");
-                activeUAS->requestParameter(0, "SENS_ACC_ZSCALE");
-                activeUAS->requestParameter(0, "SENS_BOARD_ROT");
-            }
-            if (text.startsWith("gyro ")) {
-                activeUAS->requestParameter(0, "SENS_GYRO_XOFF");
-                activeUAS->requestParameter(0, "SENS_GYRO_YOFF");
-                activeUAS->requestParameter(0, "SENS_GYRO_ZOFF");
-                activeUAS->requestParameter(0, "SENS_GYRO_XSCALE");
-                activeUAS->requestParameter(0, "SENS_GYRO_YSCALE");
-                activeUAS->requestParameter(0, "SENS_GYRO_ZSCALE");
-                activeUAS->requestParameter(0, "SENS_BOARD_ROT");
-            }
-            if (text.startsWith("mag ")) {
-                activeUAS->requestParameter(0, "SENS_MAG_XOFF");
-                activeUAS->requestParameter(0, "SENS_MAG_YOFF");
-                activeUAS->requestParameter(0, "SENS_MAG_ZOFF");
-                activeUAS->requestParameter(0, "SENS_MAG_XSCALE");
-                activeUAS->requestParameter(0, "SENS_MAG_YSCALE");
-                activeUAS->requestParameter(0, "SENS_MAG_ZSCALE");
-                activeUAS->requestParameter(0, "SENS_EXT_MAG_ROT");
-            }
-
-            if (text.startsWith("dpress ")) {
-                activeUAS->requestParameter(0, "SENS_DPRES_OFF");
-                activeUAS->requestParameter(0, "SENS_DPRES_ANA");
-            }
+            _requestAllSensorParameters();
         }
     }
 
@@ -497,4 +473,35 @@ void QGCPX4SensorCalibration::contextMenuEvent(QContextMenuEvent* event)
     QMenu menu(this);
     menu.addAction(clearAction);
     menu.exec(event->globalPos());
+}
+
+void QGCPX4SensorCalibration::_requestAllSensorParameters(void)
+{
+    static const char* rgSensorsCalParamsV1[] = {
+        "SENS_ACC_XOFF", "SENS_ACC_YOFF", "SENS_ACC_ZOFF", "SENS_ACC_XSCALE", "SENS_ACC_YSCALE", "SENS_ACC_ZSCALE",
+        "SENS_GYRO_XOFF", "SENS_GYRO_YOFF", "SENS_GYRO_ZOFF", "SENS_GYRO_XSCALE", "SENS_GYRO_YSCALE", "SENS_GYRO_ZSCALE",
+        "SENS_MAG_XOFF", "SENS_MAG_YOFF", "SENS_MAG_ZOFF", "SENS_MAG_XSCALE", "SENS_MAG_YSCALE", "SENS_MAG_ZSCALE", "SENS_EXT_MAG_ROT",
+        "SENS_DPRES_OFF", "SENS_DPRES_ANA",
+        "SENS_BOARD_ROT",
+        NULL };
+    
+    static const char* rgSensorsCalParamsV2[] = {
+        "CAL_ACC0_ID", "CAL_ACC0_XOFF", "CAL_ACC0_YOFF", "CAL_ACC0_ZOFF", "CAL_ACC0_XSCALE", "CAL_ACC0_YSCALE", "CAL_ACC0_ZSCALE",
+        "CAL_GYRO0_ID", "CAL_GYRO0_XOFF", "CAL_GYRO0_YOFF", "CAL_GYRO0_ZOFF", "CAL_GYRO0_XSCALE", "CAL_GYRO0_YSCALE", "CAL_GYRO0_ZSCALE",
+        "CAL_MAG0_ID", "CAL_MAG0_XOFF", "CAL_MAG0_YOFF", "CAL_MAG0_ZOFF", "CAL_MAG0_XSCALE", "CAL_MAG0_YSCALE", "CAL_MAG0_ZSCALE", "SENS_EXT_MAG_ROT",
+        "SENS_DPRES_OFF", "SENS_DPRES_ANA",
+        "SENS_BOARD_ROT",
+        NULL };
+
+    Q_ASSERT(activeUAS);
+    QGCUASParamManagerInterface* paramMgr = activeUAS->getParamManager();
+    
+    // Temp hack for parameter mapping
+    bool paramsV1 = paramMgr->getComponentForParam("SENS_MAG_XOFF").count();
+    static const char** prgParamList = paramsV1 ? rgSensorsCalParamsV1 : rgSensorsCalParamsV2;
+
+    for (size_t i=0; prgParamList[i] != NULL; i++) {
+        qDebug() << "Requesting" << prgParamList[i];
+        activeUAS->requestParameter(0, prgParamList[i]);
+    }
 }

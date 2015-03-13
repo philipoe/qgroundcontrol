@@ -32,9 +32,12 @@ This file is part of the QGROUNDCONTROL project
 #include <QProgressBar>
 #include <QComboBox>
 #include <QTimer>
+
 #include "UASInterface.h"
-#include "QGCMAVLinkLogPlayer.h"
 #include "SerialLink.h"
+#include "LinkManager.h"
+
+class UASMessageViewRollDown;
 
 class QGCToolBar : public QToolBar
 {
@@ -44,17 +47,18 @@ public:
     explicit QGCToolBar(QWidget* parent = 0);
     void setPerspectiveChangeActions(const QList<QAction*> &action);
     void setPerspectiveChangeAdvancedActions(const QList<QAction*> &action);
-    ~QGCToolBar();
+    /**
+     * @brief Mouse entered Message label area
+     */
+    void enterMessageLabel();
+    /**
+     * @brief Mouse left message drop down list area (and closed it)
+     */
+    void leaveMessageView();
 
 public slots:
     /** @brief Set the system that is currently displayed by this widget */
     void setActiveUAS(UASInterface* active);
-    /** @brief Set the link which is currently handled with connecting / disconnecting */
-    void addLink(LinkInterface* link);
-    /** @brief Remove link which is currently handled */
-    void removeLink(LinkInterface* link);
-    /** @brief Update the link state */
-    void updateLinkState(bool connected);
     /** @brief Set the system state */
     void updateState(UASInterface* system, QString name, QString description);
     /** @brief Set the system mode */
@@ -77,31 +81,10 @@ public slots:
     void updateView();
     /** @brief Update connection timeout time */
     void heartbeatTimeout(bool timeout, unsigned int ms);
-    /** @brief Update global position */
-    void globalPositionChanged(UASInterface* uas, double lat, double lon, double altAMSL, double altWGS84, quint64 usec);
-    /** @brief Create or connect link */
-    void connectLink(bool connect);
-    /** @brief Clear status string */
-    void clearStatusString();
     /** @brief Set an activity action as checked in menu */
     void advancedActivityTriggered(QAction* action);
-    void updateComboBox();
-
-    /**
-     * @brief User selected baud rate
-     * @param index The current index of the combo box
-     */
-    void baudSelected(int index);
-
-    /**
-     * @brief User selected port
-     * @param index The current index of the combo box
-     */
-    void portSelected(int index);
 
 protected:
-    void storeSettings();
-    void loadSettings();
     void createUI();
     void resetToolbarUI();
     UASInterface* mav;
@@ -110,8 +93,6 @@ protected:
     QLabel* toolBarTimeoutLabel;
     QAction* toolBarTimeoutAction; ///< Needed to set label (in)visible.
     QAction* toolBarMessageAction;
-    QAction* toolBarPortAction;
-    QAction* toolBarBaudAction;
     QAction* toolBarWpAction;
     QAction* toolBarBatteryBarAction;
     QAction* toolBarBatteryVoltageAction;
@@ -120,22 +101,14 @@ protected:
     QLabel* toolBarStateLabel;
     QLabel* toolBarWpLabel;
     QLabel* toolBarMessageLabel;
-    QPushButton* connectButton;
     QProgressBar* toolBarBatteryBar;
     QLabel* toolBarBatteryVoltageLabel;
 
-    QGCMAVLinkLogPlayer* player;
-    QComboBox *portComboBox;
-    QComboBox *baudcomboBox;
-    QTimer portBoxTimer;
-    bool userBaudChoice;
-    bool userPortChoice;
     bool changed;
     float batteryPercent;
     float batteryVoltage;
     int wpId;
     double wpDistance;
-    float altitudeMSL;
     float altitudeRel;
     QString state;
     QString mode;
@@ -148,6 +121,28 @@ protected:
     QAction* firstAction;
     QToolButton *advancedButton;
     QButtonGroup *group;
+
+private slots:
+    void _linkConnected(LinkInterface* link);
+    void _linkDisconnected(LinkInterface* link);
+    void _disconnectFromMenu(bool checked);
+    void _connectButtonClicked(bool checked);
+    void _linkComboActivated(int index);
+    void _updateConfigurations();
+
+private:
+    void _updateConnectButton(LinkInterface* disconnectedLink = NULL);
+
+    LinkManager*    _linkMgr;
+
+    QComboBox*  _linkCombo;
+    QAction*    _linkComboAction;
+
+    UASMessageViewRollDown* _rollDownMessages;
+
+    QPushButton*    _connectButton;
+    bool            _linksConnected;
+    bool            _linkSelected;      // User selected a link. Stop autoselecting it.
 };
 
 #endif // QGCTOOLBAR_H

@@ -32,7 +32,6 @@ This file is part of the QGROUNDCONTROL project
 #ifndef _UAS_H_
 #define _UAS_H_
 
-#include <QThread>
 #include "UASInterface.h"
 #include <MAVLinkProtocol.h>
 #include <QVector3D>
@@ -44,6 +43,7 @@ This file is part of the QGROUNDCONTROL project
 #include "QGCUASParamManager.h"
 #include "QGCUASFileManager.h"
 
+Q_DECLARE_LOGGING_CATEGORY(UASLog)
 
 /**
  * @brief A generic MAVLINK-connected MAV/UAV
@@ -57,7 +57,7 @@ class UAS : public UASInterface
 {
     Q_OBJECT
 public:
-    UAS(MAVLinkProtocol* protocol, QThread* thread, int id = 0);
+    UAS(MAVLinkProtocol* protocol, int id = 0);
     ~UAS();
 
     float lipoFull;  ///< 100% charged voltage
@@ -72,7 +72,7 @@ public:
     /** @brief Get short mode */
     const QString& getShortMode() const;
     /** @brief Translate from mode id to text */
-    static QString getShortModeTextFor(uint8_t base_mode, uint32_t custom_mode, int autopilot);
+    QString getShortModeTextFor(uint8_t base_mode, uint32_t custom_mode) const;
     /** @brief Translate from mode id to audio text */
     static QString getAudioModeTextFor(int id);
     /** @brief Get the unique system id */
@@ -92,7 +92,7 @@ public:
     /** @brief Add one measurement and get low-passed voltage */
     float filterVoltage(float value) const;
     /** @brief Get the links associated with this robot */
-    QList<LinkInterface*>* getLinks();
+    QList<LinkInterface*> getLinks();
 
     Q_PROPERTY(double localX READ getLocalX WRITE setLocalX NOTIFY localXChanged)
     Q_PROPERTY(double localY READ getLocalY WRITE setLocalY NOTIFY localYChanged)
@@ -334,65 +334,6 @@ public:
     bool isRotaryWing();
     bool isFixedWing();
 
-#if defined(QGC_PROTOBUF_ENABLED) && defined(QGC_USE_PIXHAWK_MESSAGES)
-    px::GLOverlay getOverlay()
-    {
-        QMutexLocker locker(&overlayMutex);
-        return overlay;
-    }
-
-    px::GLOverlay getOverlay(qreal& receivedTimestamp)
-    {
-        receivedTimestamp = receivedOverlayTimestamp;
-        QMutexLocker locker(&overlayMutex);
-        return overlay;
-    }
-
-    px::ObstacleList getObstacleList() {
-        QMutexLocker locker(&obstacleListMutex);
-        return obstacleList;
-    }
-
-    px::ObstacleList getObstacleList(qreal& receivedTimestamp) {
-        receivedTimestamp = receivedObstacleListTimestamp;
-        QMutexLocker locker(&obstacleListMutex);
-        return obstacleList;
-    }
-
-    px::Path getPath() {
-        QMutexLocker locker(&pathMutex);
-        return path;
-    }
-
-    px::Path getPath(qreal& receivedTimestamp) {
-        receivedTimestamp = receivedPathTimestamp;
-        QMutexLocker locker(&pathMutex);
-        return path;
-    }
-
-    px::PointCloudXYZRGB getPointCloud() {
-        QMutexLocker locker(&pointCloudMutex);
-        return pointCloud;
-    }
-
-    px::PointCloudXYZRGB getPointCloud(qreal& receivedTimestamp) {
-        receivedTimestamp = receivedPointCloudTimestamp;
-        QMutexLocker locker(&pointCloudMutex);
-        return pointCloud;
-    }
-
-    px::RGBDImage getRGBDImage() {
-        QMutexLocker locker(&rgbdImageMutex);
-        return rgbdImage;
-    }
-
-    px::RGBDImage getRGBDImage(qreal& receivedTimestamp) {
-        receivedTimestamp = receivedRGBDImageTimestamp;
-        QMutexLocker locker(&rgbdImageMutex);
-        return rgbdImage;
-    }
-#endif
-
     friend class UASWaypointManager;
     friend class QGCUASFileManager;
 
@@ -400,7 +341,7 @@ protected: //COMMENTS FOR TEST UNIT
     /// LINK ID AND STATUS
     int uasId;                    ///< Unique system ID
     QMap<int, QString> components;///< IDs and names of all detected onboard components
-    QList<LinkInterface*>* links; ///< List of links this UAS can be reached by
+    QList<LinkInterface*> links;  ///< List of links this UAS can be reached by
     QList<int> unknownPackets;    ///< Packet IDs which are unknown and have been received
     MAVLinkProtocol* mavlink;     ///< Reference to the MAVLink instance
     CommStatus commStatus;        ///< Communication status
@@ -431,15 +372,10 @@ protected: //COMMENTS FOR TEST UNIT
 
     // dongfang: This looks like a candidate for being moved off to a separate class.
     /// BATTERY / ENERGY
-    BatteryType batteryType;    ///< The battery type
-    int cells;                  ///< Number of cells
-    float fullVoltage;          ///< Voltage of the fully charged battery (100%)
-    float emptyVoltage;         ///< Voltage of the empty battery (0%)
     float startVoltage;         ///< Voltage at system start
     float tickVoltage;          ///< Voltage where 0.1 V ticks are told
     float lastTickVoltageValue; ///< The last voltage where a tick was announced
     float tickLowpassVoltage;   ///< Lowpass-filtered voltage for the tick announcement
-    float warnVoltage;          ///< Voltage where QGC will start to warn about low battery
     float warnLevelPercent;     ///< Warning level, in percent
     double currentVoltage;      ///< Voltage currently measured
     float lpVoltage;            ///< Low-pass filtered voltage
@@ -525,28 +461,6 @@ protected: //COMMENTS FOR TEST UNIT
     bool blockHomePositionChanges;   ///< Block changes to the home position
     bool receivedMode;          ///< True if mode was retrieved from current conenction to UAS
 
-#if defined(QGC_PROTOBUF_ENABLED) && defined(QGC_USE_PIXHAWK_MESSAGES)
-    px::GLOverlay overlay;
-    QMutex overlayMutex;
-    qreal receivedOverlayTimestamp;
-
-    px::ObstacleList obstacleList;
-    QMutex obstacleListMutex;
-    qreal receivedObstacleListTimestamp;
-
-    px::Path path;
-    QMutex pathMutex;
-    qreal receivedPathTimestamp;
-
-    px::PointCloudXYZRGB pointCloud;
-    QMutex pointCloudMutex;
-    qreal receivedPointCloudTimestamp;
-
-    px::RGBDImage rgbdImage;
-    QMutex rgbdImageMutex;
-    qreal receivedRGBDImageTimestamp;
-#endif
-
     /// PARAMETERS
     QMap<int, QMap<QString, QVariant>* > parameters; ///< All parameters
     bool paramsOnceRequested;       ///< If the parameter list has been read at least once
@@ -554,7 +468,6 @@ protected: //COMMENTS FOR TEST UNIT
 
     /// SIMULATION
     QGCHilLink* simulation;         ///< Hardware in the loop simulation link
-    QThread* _thread;
 
 public:
     /** @brief Set the current battery type */
@@ -911,9 +824,6 @@ public slots:
     /** @brief Set current mode of operation, e.g. auto or manual, does not check the arming status, for anything else than arming/disarming operations use setMode instead */
     void setModeArm(uint8_t newBaseMode, uint32_t newCustomMode);
 
-    /** @brief Request all parameters */
-    void requestParameters();
-
     /** @brief Request a single parameter by name */
     void requestParameter(int component, const QString& parameter);
     /** @brief Request a single parameter by index */
@@ -968,6 +878,12 @@ public slots:
 
     /** @brief Triggers the action associated with the given ID. */
     void triggerAction(int action);
+
+    /** @brief Send command to map a RC channel to a parameter */
+    void sendMapRCToParam(QString param_id, float scale, float value0, quint8 param_rc_channel_index, float valueMin, float valueMax);
+
+    /** @brief Send command to disable all bindings/maps between RC and parameters */
+    void unsetRCToParameterMap();
 signals:
     /** @brief The main/battery voltage has changed/was updated */
     //void voltageChanged(int uasId, double voltage); // Defined in UASInterface already
@@ -1036,13 +952,6 @@ protected slots:
     void writeSettings();
     /** @brief Read settings from disk */
     void readSettings();
-
-//    // MESSAGE RECEPTION
-//    /** @brief Receive a named value message */
-//    void receiveMessageNamedValue(const mavlink_message_t& message);
-
-private:
-//    unsigned int mode;          ///< The current mode of the MAV
 };
 
 

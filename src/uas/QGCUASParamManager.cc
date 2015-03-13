@@ -2,14 +2,16 @@
 
 #include <QApplication>
 #include <QDir>
-#include <QMessageBox>
+#include <QDebug>
 
 #include "UASInterface.h"
+#include "QGCMessageBox.h"
 
 QGCUASParamManager::QGCUASParamManager(QObject *parent) :
     QGCUASParamManagerInterface(parent),
     mav(NULL),
-    paramDataModel(this)
+    paramDataModel(this),
+    _parametersReady(false)
 {
 
 
@@ -36,8 +38,7 @@ void QGCUASParamManager::connectToModelAndComms()
     connect(&paramCommsMgr, SIGNAL(parameterStatusMsgUpdated(QString,int)),
             this, SIGNAL(parameterStatusMsgUpdated(QString,int)));
 
-    connect(&paramCommsMgr, SIGNAL(parameterListUpToDate()),
-            this, SIGNAL(parameterListUpToDate()));
+    connect(&paramCommsMgr, SIGNAL(parameterListUpToDate()), this, SLOT(_parameterListUpToDate()));
 
     // Pass along data model updates
     connect(&paramDataModel, SIGNAL(parameterUpdated(int, QString , QVariant )),
@@ -193,9 +194,8 @@ void QGCUASParamManager::copyVolatileParamsToPersistent()
     int changedParamCount = paramDataModel.countPendingParams();
 
     if (changedParamCount > 0) {
-        QMessageBox msgBox;
-        msgBox.setText(tr("There are locally changed parameters. Please transmit them first (<TRANSMIT>) or update them with the onboard values (<REFRESH>) before storing onboard from RAM to ROM."));
-        msgBox.exec();
+        QGCMessageBox::warning(tr("Warning"),
+                                   tr("There are locally changed parameters. Please transmit them first (<TRANSMIT>) or update them with the onboard values (<REFRESH>) before storing onboard from RAM to ROM."));
     }
     else {
         paramCommsMgr.writeParamsToPersistentStorage();
@@ -213,4 +213,12 @@ void QGCUASParamManager::copyPersistentParamsToVolatile()
 
 void QGCUASParamManager::requestRcCalibrationParamsUpdate() {
     paramCommsMgr.requestRcCalibrationParamsUpdate();
+}
+
+void QGCUASParamManager::_parameterListUpToDate(void)
+{
+    //qDebug() << "Emitting parameters ready, count:" << paramDataModel.countOnboardParams();
+
+    _parametersReady = true;
+    emit parameterListUpToDate();
 }

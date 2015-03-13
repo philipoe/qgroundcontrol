@@ -30,6 +30,8 @@
 ///
 ///     @author Don Gagne <don@thegagnes.com>
 
+UT_REGISTER_TEST(PX4RCCalibrationTest)
+
 // This will check for the wizard buttons being enabled of disabled according to the mask you pass in.
 // We use a macro instead of a method so that we get better line number reporting on failure.
 #define CHK_BUTTONS(mask) \
@@ -66,7 +68,7 @@ const int PX4RCCalibrationTest::_testCenterValue = PX4RCCalibrationTest::_testMi
 
 /// @brief Maps from function index to channel index. -1 signals no mapping. Channel indices are offset 1 from function index
 /// to catch bugs where function index is incorrectly used as channel index.
-const int PX4RCCalibrationTest::_rgFunctionChannelMap[PX4RCCalibration::rcCalFunctionMax]= { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 };
+const int PX4RCCalibrationTest::_rgFunctionChannelMap[PX4RCCalibration::rcCalFunctionMax]= { 1, 2, 3, 4, -1, -1, -1, -1, 9, 10, 11 };
 
 const struct PX4RCCalibrationTest::ChannelSettings PX4RCCalibrationTest::_rgChannelSettings[PX4RCCalibrationTest::_availableChannels] = {
 	// Function										Min                 Max                 #  Reversed
@@ -74,15 +76,20 @@ const struct PX4RCCalibrationTest::ChannelSettings PX4RCCalibrationTest::_rgChan
 	// Channel 0 : Not mapped to function, Simulate invalid Min/Max
 	{ PX4RCCalibration::rcCalFunctionMax,			_testCenterValue,	_testCenterValue,   0, false },
 	
-    // Channels 1-11 are mapped to all available modes
+    // Channels 1-4: Mapped to attitude control function
     { PX4RCCalibration::rcCalFunctionRoll,			_testMinValue,      _testMaxValue,      0, true },
     { PX4RCCalibration::rcCalFunctionPitch,			_testMinValue,      _testMaxValue,      0, false },
     { PX4RCCalibration::rcCalFunctionYaw,			_testMinValue,      _testMaxValue,      0, true },
     { PX4RCCalibration::rcCalFunctionThrottle,		_testMinValue,      _testMaxValue,      0,  false },
-    { PX4RCCalibration::rcCalFunctionModeSwitch,	_testMinValue,      _testMaxValue,      0, false },
-    { PX4RCCalibration::rcCalFunctionPosCtlSwitch,	_testMinValue,      _testMaxValue,      0, false },
-    { PX4RCCalibration::rcCalFunctionLoiterSwitch,	_testMinValue,      _testMaxValue,      0, false },
-    { PX4RCCalibration::rcCalFunctionReturnSwitch,	_testMinValue,      _testMaxValue,      0, false },
+    
+    // Channels 5-8: Not mapped to function, Simulate invalid Min/Max, since available channel Min/Max is still shown.
+    // These are here to skip over the flight mode functions
+    { PX4RCCalibration::rcCalFunctionMax,			_testCenterValue,   _testCenterValue,   0,	false },
+    { PX4RCCalibration::rcCalFunctionMax,			_testCenterValue,   _testCenterValue,   0,	false },
+    { PX4RCCalibration::rcCalFunctionMax,			_testCenterValue,   _testCenterValue,   0,	false },
+    { PX4RCCalibration::rcCalFunctionMax,			_testCenterValue,   _testCenterValue,   0,	false },
+    
+    // Channels 9-11: Remainder of non-flight mode switches
     { PX4RCCalibration::rcCalFunctionFlaps,			_testMinValue,      _testMaxValue,      0, false },
     { PX4RCCalibration::rcCalFunctionAux1,			_testMinValue,      _testMaxValue,      0, false },
     { PX4RCCalibration::rcCalFunctionAux2,			_testMinValue,      _testMaxValue,      0, false },
@@ -103,29 +110,33 @@ const struct PX4RCCalibrationTest::ChannelSettings PX4RCCalibrationTest::_rgChan
 const struct PX4RCCalibrationTest::ChannelSettings PX4RCCalibrationTest::_rgChannelSettingsValidate[PX4RCCalibration::_chanMax] = {
     // Function										Min Value									Max Value									Trim Value										Reversed
 	
-	// Channel 0 is not mapped and should be defaulted
+    // Channels 0: not mapped and should be set to defaults
 	{ PX4RCCalibration::rcCalFunctionMax,			PX4RCCalibration::_rcCalPWMDefaultMinValue,	PX4RCCalibration::_rcCalPWMDefaultMaxValue,	PX4RCCalibration::_rcCalPWMCenterPoint,         false },
 	
-	// Channels 1-11 are mapped to all available modes
-	{ PX4RCCalibration::rcCalFunctionRoll,			_testMinValue,		_testMaxValue,        _testCenterValue, true },
-    { PX4RCCalibration::rcCalFunctionPitch,			_testMinValue,		_testMaxValue,        _testCenterValue, false },
-    { PX4RCCalibration::rcCalFunctionYaw,			_testMinValue,		_testMaxValue,        _testCenterValue, true },
-    { PX4RCCalibration::rcCalFunctionThrottle,		_testMinValue,		_testMaxValue,        _testMinValue,    false },
-    { PX4RCCalibration::rcCalFunctionModeSwitch,	_testMinValue,		_testMaxValue,        _testCenterValue, false },
-    { PX4RCCalibration::rcCalFunctionPosCtlSwitch,	_testMinValue,		_testMaxValue,        _testCenterValue, false },
-    { PX4RCCalibration::rcCalFunctionLoiterSwitch,	_testMinValue,		_testMaxValue,        _testCenterValue, false },
-    { PX4RCCalibration::rcCalFunctionReturnSwitch,	_testMinValue,		_testMaxValue,        _testCenterValue, false },
-    { PX4RCCalibration::rcCalFunctionFlaps,			_testMinValue,		_testMaxValue,        _testCenterValue, false },
-    { PX4RCCalibration::rcCalFunctionAux1,			_testMinValue,		_testMaxValue,        _testCenterValue, false },
-    { PX4RCCalibration::rcCalFunctionAux2,			_testMinValue,		_testMaxValue,        _testCenterValue, false },
+    // Channels 1-4: Mapped to attitude control function
+	{ PX4RCCalibration::rcCalFunctionRoll,			_testMinValue,                              _testMaxValue,                              _testCenterValue,                               true },
+    { PX4RCCalibration::rcCalFunctionPitch,			_testMinValue,                              _testMaxValue,                              _testCenterValue,                               false },
+    { PX4RCCalibration::rcCalFunctionYaw,			_testMinValue,                              _testMaxValue,                              _testCenterValue,                               true },
+    { PX4RCCalibration::rcCalFunctionThrottle,		_testMinValue,                              _testMaxValue,                              _testMinValue,                                  false },
+    
+    // Channels 5-8: not mapped and should be set to defaults
+    { PX4RCCalibration::rcCalFunctionMax,			PX4RCCalibration::_rcCalPWMDefaultMinValue,	PX4RCCalibration::_rcCalPWMDefaultMaxValue,	PX4RCCalibration::_rcCalPWMCenterPoint,         false },
+    { PX4RCCalibration::rcCalFunctionMax,			PX4RCCalibration::_rcCalPWMDefaultMinValue,	PX4RCCalibration::_rcCalPWMDefaultMaxValue,	PX4RCCalibration::_rcCalPWMCenterPoint,         false },
+    { PX4RCCalibration::rcCalFunctionMax,			PX4RCCalibration::_rcCalPWMDefaultMinValue,	PX4RCCalibration::_rcCalPWMDefaultMaxValue,	PX4RCCalibration::_rcCalPWMCenterPoint,         false },
+    { PX4RCCalibration::rcCalFunctionMax,			PX4RCCalibration::_rcCalPWMDefaultMinValue,	PX4RCCalibration::_rcCalPWMDefaultMaxValue,	PX4RCCalibration::_rcCalPWMCenterPoint,         false },
+    
+    // Channels 9-11: Remainder of non-flight mode switches
+    { PX4RCCalibration::rcCalFunctionFlaps,			_testMinValue,                              _testMaxValue,                              _testCenterValue,                               false },
+    { PX4RCCalibration::rcCalFunctionAux1,			_testMinValue,                              _testMaxValue,                              _testCenterValue,                               false },
+    { PX4RCCalibration::rcCalFunctionAux2,			_testMinValue,                              _testMaxValue,                              _testCenterValue,                               false },
 	
 	// Channels 12-17 are not mapped and should be set to defaults
 	{ PX4RCCalibration::rcCalFunctionMax,			PX4RCCalibration::_rcCalPWMDefaultMinValue,	PX4RCCalibration::_rcCalPWMDefaultMaxValue,	PX4RCCalibration::_rcCalPWMCenterPoint,         false },
 	{ PX4RCCalibration::rcCalFunctionMax,			PX4RCCalibration::_rcCalPWMDefaultMinValue,	PX4RCCalibration::_rcCalPWMDefaultMaxValue,	PX4RCCalibration::_rcCalPWMCenterPoint,         false },
 	{ PX4RCCalibration::rcCalFunctionMax,			PX4RCCalibration::_rcCalPWMDefaultMinValue,	PX4RCCalibration::_rcCalPWMDefaultMaxValue,	PX4RCCalibration::_rcCalPWMCenterPoint,         false },
 	{ PX4RCCalibration::rcCalFunctionMax,			PX4RCCalibration::_rcCalPWMDefaultMinValue,	PX4RCCalibration::_rcCalPWMDefaultMaxValue,	PX4RCCalibration::_rcCalPWMCenterPoint,         false },
-	{ PX4RCCalibration::rcCalFunctionMax,			PX4RCCalibration::_rcCalPWMDefaultMinValue,	PX4RCCalibration::_rcCalPWMDefaultMaxValue,	PX4RCCalibration::_rcCalPWMCenterPoint,         false },
-	{ PX4RCCalibration::rcCalFunctionMax,			PX4RCCalibration::_rcCalPWMDefaultMinValue,	PX4RCCalibration::_rcCalPWMDefaultMaxValue,	PX4RCCalibration::_rcCalPWMCenterPoint,         false },
+    { PX4RCCalibration::rcCalFunctionMax,			PX4RCCalibration::_rcCalPWMDefaultMinValue,	PX4RCCalibration::_rcCalPWMDefaultMaxValue,	PX4RCCalibration::_rcCalPWMCenterPoint,         false },
+    { PX4RCCalibration::rcCalFunctionMax,			PX4RCCalibration::_rcCalPWMDefaultMinValue,	PX4RCCalibration::_rcCalPWMDefaultMaxValue,	PX4RCCalibration::_rcCalPWMCenterPoint,         false },
 };
 
 PX4RCCalibrationTest::PX4RCCalibrationTest(void) :
@@ -149,21 +160,22 @@ void PX4RCCalibrationTest::initTestCase(void)
 
 void PX4RCCalibrationTest::init(void)
 {
+    UnitTest::init();
+    
     _mockUASManager = new MockUASManager();
     Q_ASSERT(_mockUASManager);
     
-    UASManager::setMockUASManager(_mockUASManager);
+    UASManager::setMockInstance(_mockUASManager);
     
     _mockUAS = new MockUAS();
     Q_CHECK_PTR(_mockUAS);
     
-    // This will instatiate the widget with no active UAS set
+    _mockUASManager->setMockActiveUAS(_mockUAS);
+    
+    // This will instatiate the widget with an active uas with ready parameters
     _calWidget = new PX4RCCalibration();
     Q_CHECK_PTR(_calWidget);
-    _calWidget->_setUnitTestMode();
-    _calWidget->setVisible(true);
-    
-    _mockUASManager->setMockActiveUAS(_mockUAS);
+    _calWidget->_setUnitTestMode();    
 
     // Get pointers to the push buttons
     _cancelButton = _calWidget->findChild<QPushButton*>("rcCalCancel");
@@ -202,22 +214,12 @@ void PX4RCCalibrationTest::cleanup(void)
     Q_ASSERT(_mockUAS);
     delete _mockUAS;
     
-    UASManager::setMockUASManager(NULL);
+    UASManager::setMockInstance(NULL);
     
     Q_ASSERT(_mockUASManager);
     delete _mockUASManager;
     
-}
-
-/// @brief Tests for correct behavior when active UAS is set into widget.
-void PX4RCCalibrationTest::_setUAS_test(void)
-{
-    // Widget is initialized with UAS, so it should be enabled
-    QCOMPARE(_calWidget->isEnabled(), true);
-
-    // Take away the UAS and widget should disable
-    _mockUASManager->setMockActiveUAS(NULL);
-    QCOMPARE(_calWidget->isEnabled(), false);
+    UnitTest::cleanup();
 }
 
 /// @brief Test for correct behavior in determining minimum numbers of channels for flight.
@@ -244,12 +246,16 @@ void PX4RCCalibrationTest::_minRCChannels_test(void)
         }
         _multiSpyNextButtonMessageBox->clearAllSignals();
 
+        // The following test code no longer works since view update doesn't happens until parameters are received.
+        // Leaving code here because RC Cal could be restructured to handle this case at some point.
+#if 0
         // Only available channels should have visible widget. A ui update cycle needs to have passed so we wait a little.
         QTest::qWait(PX4RCCalibration::_updateInterval * 2);
         for (int chanWidget=0; chanWidget<PX4RCCalibration::_chanMax; chanWidget++) {
             //qDebug() << _rgValueWidget[chanWidget]->objectName() << chanWidget << chan;
             QCOMPARE(_rgValueWidget[chanWidget]->isVisible(), !!(chanWidget <= chan));
         }
+#endif
     }
 }
 
@@ -418,10 +424,6 @@ void PX4RCCalibrationTest::_fullCalibration_test(void)
     _switchMinMaxStep();
     _flapsDetectStep();
     _stickMoveAutoStep("Flaps", PX4RCCalibration::rcCalFunctionFlaps, moveToMin, false /* not identify step */);
-    _switchSelectAutoStep("Mode", PX4RCCalibration::rcCalFunctionModeSwitch);
-    _switchSelectAutoStep("PostCtl", PX4RCCalibration::rcCalFunctionPosCtlSwitch);
-    _switchSelectAutoStep("Loiter", PX4RCCalibration::rcCalFunctionLoiterSwitch);
-    _switchSelectAutoStep("Return", PX4RCCalibration::rcCalFunctionReturnSwitch);
     _switchSelectAutoStep("Aux1", PX4RCCalibration::rcCalFunctionAux1);
     _switchSelectAutoStep("Aux2", PX4RCCalibration::rcCalFunctionAux2);
 
@@ -438,8 +440,9 @@ void PX4RCCalibrationTest::_channelHomePosition(void)
         _mockUAS->emitRemoteControlChannelRawChanged(i, (float)PX4RCCalibration::_rcCalPWMCenterPoint);
     }
     
-    // Throttle to low position (throttle is not reversed)/
-    _mockUAS->emitRemoteControlChannelRawChanged(_rgFunctionChannelMap[PX4RCCalibration::rcCalFunctionThrottle], _testMinValue);
+    // Throttle to min - 1 (throttle is not reversed). We do this so that the trim value is below the min value. This should end up
+    // being validated and raised to min value. If not, something is wrong with RC Cal code.
+    _mockUAS->emitRemoteControlChannelRawChanged(_rgFunctionChannelMap[PX4RCCalibration::rcCalFunctionThrottle], _testMinValue - 1);
 }
 
 void PX4RCCalibrationTest::_validateParameters(void)

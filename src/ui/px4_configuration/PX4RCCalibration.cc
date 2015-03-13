@@ -25,11 +25,11 @@
 ///     @brief PX4 RC Calibration Widget
 ///     @author Don Gagne <don@thegagnes.com
 
-#include <QMessageBox>
 #include <QSettings>
 
 #include "PX4RCCalibration.h"
 #include "UASManager.h"
+#include "QGCMessageBox.h"
 
 const int PX4RCCalibration::_updateInterval = 150;              ///< Interval for timer which updates radio channel widgets
 const int PX4RCCalibration::_rcCalPWMCenterPoint = ((PX4RCCalibration::_rcCalPWMValidMaxValue - PX4RCCalibration::_rcCalPWMValidMinValue) / 2.0f) + PX4RCCalibration::_rcCalPWMValidMinValue;
@@ -86,7 +86,6 @@ PX4RCCalibration::PX4RCCalibration(QWidget *parent) :
     _rcCalState(rcCalStateChannelWait),
     _mav(NULL),
     _paramMgr(NULL),
-    _parameterListUpToDateSignalled(false),
     _ui(new Ui::PX4RCCalibration),
     _unitTestMode(false)
 {
@@ -120,20 +119,25 @@ PX4RCCalibration::PX4RCCalibration(QWidget *parent) :
     _rgAttitudeControl[4].function = rcCalFunctionFlaps;
     _rgAttitudeControl[4].valueWidget = _ui->flapsValue;
     
-    _setActiveUAS(UASManager::instance()->getActiveUAS());
+    // This code assume we already have an active UAS with ready parameters
+    _mav = UASManager::instance()->getActiveUAS();
+    Q_ASSERT(_mav);
     
-    // Connect signals
+    // Connect new signals
+    
     bool fSucceeded;
     Q_UNUSED(fSucceeded);
-    
-    fSucceeded = connect(UASManager::instance(), SIGNAL(activeUASSet(UASInterface*)), this, SLOT(_setActiveUAS(UASInterface*)));
+    fSucceeded =  connect(_mav, SIGNAL(remoteControlChannelRawChanged(int,float)), this, SLOT(_remoteControlChannelRawChanged(int,float)));
     Q_ASSERT(fSucceeded);
-
+    
+    _paramMgr = _mav->getParamManager();
+    Q_ASSERT(_paramMgr);
+    Q_ASSERT(_paramMgr->parametersReady());
+    
     connect(_ui->spektrumBind, &QPushButton::clicked, this, &PX4RCCalibration::_spektrumBind);
     
     _updateTimer.setInterval(150);
     _updateTimer.start();
-    connect(&_updateTimer, &QTimer::timeout, this, &PX4RCCalibration::_updateView);
 
     connect(_ui->rcCalCancel, &QPushButton::clicked, this, &PX4RCCalibration::_stopCalibration);
     connect(_ui->rcCalSkip, &QPushButton::clicked, this, &PX4RCCalibration::_skipButton);
@@ -160,6 +164,9 @@ PX4RCCalibration::PX4RCCalibration(QWidget *parent) :
     connect(_ui->mode2, &QAbstractButton::toggled, this, &PX4RCCalibration::_mode2Toggled);
     
     _stopCalibration();
+    
+    connect(&_updateTimer, &QTimer::timeout, this, &PX4RCCalibration::_updateView);
+    _setInternalCalibrationValuesFromParameters();
 }
 
 PX4RCCalibration::~PX4RCCalibration()
@@ -182,13 +189,6 @@ const PX4RCCalibration::stateMachineEntry* PX4RCCalibration::_getStateMachineEnt
     static const char* msgPitchDown = "Move the Pitch stick all the way down and hold it there...";
     static const char* msgPitchUp = "Move the Pitch stick all the way up and hold it there...";
     static const char* msgPitchCenter = "Allow the Pitch stick to move back to center...";
-    static const char* msgModeSwitch = "Next we will assign the channel for the Mode Switch. Move the switch or dial up and down to select the channel.";
-    static const char* msgPosCtlSwitch = "Next we will assign the channel for the PosCtl Switch. Move the switch or dial up and down to select the channel.\n\n"
-                                            "You can click Skip if you don't want to assign this switch.";
-    static const char* msgLoiterSwitch = "Next we will assign the channel for the Loiter Switch. Move the switch or dial up and down to select the channel.\n\n"
-                                            "You can click Skip if you don't want to assign this switch.";
-    static const char* msgReturnSwitch = "Next we will assign the channel for the Return Switch. Move the switch or dial up and down to select the channel.\n\n"
-                                            "You can click Skip if you don't want to assign this switch.";
     static const char* msgAux1Switch = "Move the switch or dial you want to use for Aux1.\n\n"
                                             "You can click Skip if you don't want to assign.";
     static const char* msgAux2Switch = "Move the switch or dial you want to use for Aux2.\n\n"
@@ -216,10 +216,6 @@ const PX4RCCalibration::stateMachineEntry* PX4RCCalibration::_getStateMachineEnt
         { rcCalFunctionMax,                 msgSwitchMinMax,    _imageSwitchMinMax, &PX4RCCalibration::_inputSwitchMinMax,      &PX4RCCalibration::_nextStep,           NULL },
         { rcCalFunctionFlaps,               msgFlapsDetect,     _imageThrottleDown, &PX4RCCalibration::_inputFlapsDetect,       &PX4RCCalibration::_saveFlapsDown,      &PX4RCCalibration::_skipFlaps },
         { rcCalFunctionFlaps,               msgFlapsUp,         _imageThrottleDown, &PX4RCCalibration::_inputFlapsUp,           NULL,                                   NULL },
-        { rcCalFunctionModeSwitch,          msgModeSwitch,      _imageThrottleDown, &PX4RCCalibration::_inputSwitchDetect,      NULL,                                   NULL },
-        { rcCalFunctionPosCtlSwitch,        msgPosCtlSwitch,    _imageThrottleDown, &PX4RCCalibration::_inputSwitchDetect,      NULL,                                   &PX4RCCalibration::_nextStep },
-        { rcCalFunctionLoiterSwitch,        msgLoiterSwitch,    _imageThrottleDown, &PX4RCCalibration::_inputSwitchDetect,      NULL,                                   &PX4RCCalibration::_nextStep },
-        { rcCalFunctionReturnSwitch,        msgReturnSwitch,    _imageThrottleDown, &PX4RCCalibration::_inputSwitchDetect,      NULL,                                   &PX4RCCalibration::_nextStep },
         { rcCalFunctionAux1,                msgAux1Switch,      _imageThrottleDown, &PX4RCCalibration::_inputSwitchDetect,      NULL,                                   &PX4RCCalibration::_nextStep },
         { rcCalFunctionAux2,                msgAux2Switch,      _imageThrottleDown, &PX4RCCalibration::_inputSwitchDetect,      NULL,                                   &PX4RCCalibration::_nextStep },
         { rcCalFunctionMax,                 msgComplete,        _imageThrottleDown, NULL,                                       &PX4RCCalibration::_writeCalibration,   NULL },
@@ -298,7 +294,7 @@ void PX4RCCalibration::_nextButton(void)
             if (_unitTestMode) {
                 emit nextButtonMessageBoxDisplayed();
             } else {
-                QMessageBox::warning(this, tr("Receiver"), tr("Detected %1 radio channels. To operate PX4, you need at least %2 channels.").arg(_chanCount).arg(_chanMinimum));
+                QGCMessageBox::warning(tr("Receiver"), tr("Detected %1 radio channels. To operate PX4, you need at least %2 channels.").arg(_chanCount).arg(_chanMinimum));
             }
             return;
         }
@@ -323,7 +319,7 @@ void PX4RCCalibration::_skipButton(void)
 
 void PX4RCCalibration::_trimNYI(void)
 {
-    QMessageBox::warning(this, tr("Set Trim"), tr("Setting individual trims is not yet implemented. You will need to go through full calibration to set trims."));
+    QGCMessageBox::warning(tr("Set Trim"), tr("Setting individual trims is not yet implemented. You will need to go through full calibration to set trims."));
 }
 
 void PX4RCCalibration::_saveAllTrims(void)
@@ -560,7 +556,7 @@ void PX4RCCalibration::_saveFlapsDown(void)
         if (_unitTestMode) {
             emit nextButtonMessageBoxDisplayed();
         } else {
-            QMessageBox::warning(this, tr("Flaps switch"), tr("Flaps switch has not yet been detected."));
+            QGCMessageBox::warning(tr("Flaps switch"), tr("Flaps switch has not yet been detected."));
         }
         return;
     }
@@ -693,6 +689,38 @@ void PX4RCCalibration::_resetInternalCalibrationValues(void)
     
     _showMinMaxOnRadioWidgets(false);
     _showTrimOnRadioWidgets(false);
+    
+    // Reserve the existing Flight Mode switch settings channels so we don't re-use them
+    
+    static const rcCalFunctions rgFlightModeFunctions[] = {
+        rcCalFunctionModeSwitch,
+        rcCalFunctionPosCtlSwitch,
+        rcCalFunctionLoiterSwitch,
+        rcCalFunctionReturnSwitch };
+    static const size_t crgFlightModeFunctions = sizeof(rgFlightModeFunctions) / sizeof(rgFlightModeFunctions[0]);
+
+    int componentId = _paramMgr->getDefaultComponentId();
+    for (size_t i=0; i < crgFlightModeFunctions; i++) {
+        QVariant value;
+        enum rcCalFunctions curFunction = rgFlightModeFunctions[i];
+        
+        bool paramFound = _paramMgr->getParameterValue(componentId, _rgFunctionInfo[curFunction].parameterName, value);
+        Q_ASSERT(paramFound);
+        Q_UNUSED(paramFound);
+        
+        bool ok;
+        int channel = value.toInt(&ok);
+        Q_ASSERT(ok);
+        Q_UNUSED(ok);
+        
+        // Parameter: 1-based channel, 0=not mapped
+        // _rgFunctionChannelMapping: 0-based channel, _chanMax=not mapped
+        
+        _rgFunctionChannelMapping[curFunction] = (channel == 0) ? _chanMax : channel;
+        if (channel != 0) {
+            _rgChannelInfo[channel - 1].function = curFunction;
+        }
+    }
 }
 
 /// @brief Sets internal calibration values from the stored parameters
@@ -700,84 +728,82 @@ void PX4RCCalibration::_setInternalCalibrationValuesFromParameters(void)
 {
     Q_ASSERT(_paramMgr);
     
-    if (_parameterListUpToDateSignalled) {
-        // Initialize all function mappings to not set
-        
-        for (size_t i=0; i<_chanMax; i++) {
-            struct ChannelInfo* info = &_rgChannelInfo[i];
-            info->function = rcCalFunctionMax;
-        }
-        
-        for (size_t i=0; i<rcCalFunctionMax; i++) {
-            _rgFunctionChannelMapping[i] = _chanMax;
-        }
-        
-        // FIXME: Hardwired component id
-        
-        // Pull parameters and update
-        
-        QString minTpl("RC%1_MIN");
-        QString maxTpl("RC%1_MAX");
-        QString trimTpl("RC%1_TRIM");
-        QString revTpl("RC%1_REV");
-        QVariant value;
-        bool paramFound;
-        bool convertOk;
-        int componentId = _paramMgr->getDefaultComponentId();
-        
-        for (int i = 0; i < _chanMax; ++i) {
-            struct ChannelInfo* info = &_rgChannelInfo[i];
-            
-            paramFound = _paramMgr->getParameterValue(componentId, trimTpl.arg(i+1), value);
-            Q_ASSERT(paramFound);
-            if (paramFound) {
-                info->rcTrim = value.toInt(&convertOk);
-                Q_ASSERT(convertOk);
-            }
-            
-            paramFound = _paramMgr->getParameterValue(componentId, minTpl.arg(i+1), value);
-            Q_ASSERT(paramFound);
-            if (paramFound) {
-                info->rcMin = value.toInt(&convertOk);
-                Q_ASSERT(convertOk);
-            }
-
-            paramFound = _paramMgr->getParameterValue(componentId, maxTpl.arg(i+1), value);
-            Q_ASSERT(paramFound);
-            if (paramFound) {
-                info->rcMax = value.toInt(&convertOk);
-                Q_ASSERT(convertOk);
-            }
-
-            paramFound = _paramMgr->getParameterValue(componentId, revTpl.arg(i+1), value);
-            Q_ASSERT(paramFound);
-            if (paramFound) {
-                float floatReversed = value.toFloat(&convertOk);
-                Q_ASSERT(convertOk);
-                Q_ASSERT(floatReversed == 1.0f || floatReversed == -1.0f);
-                info->reversed = floatReversed == -1.0f;
-            }
-        }
-        
-        for (int i=0; i<rcCalFunctionMax; i++) {
-            int32_t paramChannel;
-            
-            paramFound = _paramMgr->getParameterValue(componentId, _rgFunctionInfo[i].parameterName, value);
-            Q_ASSERT(paramFound);
-            if (paramFound) {
-                paramChannel = value.toInt(&convertOk);
-                Q_ASSERT(convertOk);
-                
-                if (paramChannel != 0) {
-                    _rgFunctionChannelMapping[i] = paramChannel - 1;
-                    _rgChannelInfo[paramChannel - 1].function = (enum rcCalFunctions)i;
-                }
-            }
-        }
-        
-        _showMinMaxOnRadioWidgets(true);
-        _showTrimOnRadioWidgets(true);
+    // Initialize all function mappings to not set
+    
+    for (size_t i=0; i<_chanMax; i++) {
+        struct ChannelInfo* info = &_rgChannelInfo[i];
+        info->function = rcCalFunctionMax;
     }
+    
+    for (size_t i=0; i<rcCalFunctionMax; i++) {
+        _rgFunctionChannelMapping[i] = _chanMax;
+    }
+    
+    // FIXME: Hardwired component id
+    
+    // Pull parameters and update
+    
+    QString minTpl("RC%1_MIN");
+    QString maxTpl("RC%1_MAX");
+    QString trimTpl("RC%1_TRIM");
+    QString revTpl("RC%1_REV");
+    QVariant value;
+    bool paramFound;
+    bool convertOk;
+    int componentId = _paramMgr->getDefaultComponentId();
+    
+    for (int i = 0; i < _chanMax; ++i) {
+        struct ChannelInfo* info = &_rgChannelInfo[i];
+        
+        paramFound = _paramMgr->getParameterValue(componentId, trimTpl.arg(i+1), value);
+        Q_ASSERT(paramFound);
+        if (paramFound) {
+            info->rcTrim = value.toInt(&convertOk);
+            Q_ASSERT(convertOk);
+        }
+        
+        paramFound = _paramMgr->getParameterValue(componentId, minTpl.arg(i+1), value);
+        Q_ASSERT(paramFound);
+        if (paramFound) {
+            info->rcMin = value.toInt(&convertOk);
+            Q_ASSERT(convertOk);
+        }
+
+        paramFound = _paramMgr->getParameterValue(componentId, maxTpl.arg(i+1), value);
+        Q_ASSERT(paramFound);
+        if (paramFound) {
+            info->rcMax = value.toInt(&convertOk);
+            Q_ASSERT(convertOk);
+        }
+
+        paramFound = _paramMgr->getParameterValue(componentId, revTpl.arg(i+1), value);
+        Q_ASSERT(paramFound);
+        if (paramFound) {
+            float floatReversed = value.toFloat(&convertOk);
+            Q_ASSERT(convertOk);
+            Q_ASSERT(floatReversed == 1.0f || floatReversed == -1.0f);
+            info->reversed = floatReversed == -1.0f;
+        }
+    }
+    
+    for (int i=0; i<rcCalFunctionMax; i++) {
+        int32_t paramChannel;
+        
+        paramFound = _paramMgr->getParameterValue(componentId, _rgFunctionInfo[i].parameterName, value);
+        Q_ASSERT(paramFound);
+        if (paramFound) {
+            paramChannel = value.toInt(&convertOk);
+            Q_ASSERT(convertOk);
+            
+            if (paramChannel != 0) {
+                _rgFunctionChannelMapping[i] = paramChannel - 1;
+                _rgChannelInfo[paramChannel - 1].function = (enum rcCalFunctions)i;
+            }
+        }
+    }
+    
+    _showMinMaxOnRadioWidgets(true);
+    _showTrimOnRadioWidgets(true);
 }
 
 /// @brief Sets a connected Spektrum receiver into bind mode
@@ -812,34 +838,6 @@ void PX4RCCalibration::_spektrumBind(void)
     }
 }
 
-void PX4RCCalibration::_setActiveUAS(UASInterface* active)
-{
-    // Disconnect old signals
-    if (_mav) {
-        disconnect(_mav, SIGNAL(remoteControlChannelRawChanged(int,float)), this, SLOT(_remoteControlChannelRawChanged(int,float)));
-        disconnect(_paramMgr, SIGNAL(parameterListUpToDate()), this, SLOT(_parameterListUpToDate()));
-        _paramMgr = NULL;
-    }
-    
-    _mav = active;
-    
-    if (_mav) {
-        // Connect new signals
-        bool fSucceeded;
-        Q_UNUSED(fSucceeded);
-        fSucceeded =  connect(_mav, SIGNAL(remoteControlChannelRawChanged(int,float)), this, SLOT(_remoteControlChannelRawChanged(int,float)));
-        Q_ASSERT(fSucceeded);
-        
-        _paramMgr = _mav->getParamManager();
-        Q_ASSERT(_paramMgr);
-
-        fSucceeded = connect(_paramMgr, SIGNAL(parameterListUpToDate()), this, SLOT(_parameterListUpToDate()));
-        Q_ASSERT(fSucceeded);
-    }
-
-    setEnabled(_mav ? true : false);
-}
-
 /// @brief Validates the current settings against the calibration rules resetting values as necessary.
 void PX4RCCalibration::_validateCalibration(void)
 {
@@ -860,6 +858,12 @@ void PX4RCCalibration::_validateCalibration(void)
                     case rcCalFunctionYaw:
                     case rcCalFunctionRoll:
                     case rcCalFunctionPitch:
+                        // Make sure trim is within min/max
+                        if (info->rcTrim < info->rcMin) {
+                            info->rcTrim = info->rcMin;
+                        } else if (info->rcTrim > info->rcMax) {
+                            info->rcTrim = info->rcMax;
+                        }
                         break;
                     default:
                         // Non-attitude control channels have calculated trim
@@ -881,7 +885,6 @@ void PX4RCCalibration::_validateCalibration(void)
 
 
 /// @brief Saves the rc calibration values to the board parameters.
-///     @param trimsOnly true: write only trim values, false: write all calibration values
 void PX4RCCalibration::_writeCalibration(void)
 {
     if (!_mav) return;
@@ -921,6 +924,11 @@ void PX4RCCalibration::_writeCalibration(void)
         paramMgr->setPendingParam(0, _rgFunctionInfo[i].parameterName, paramChannel);
     }
     
+    // If the RC_CHAN_COUNT parameter is available write the channel count
+    if (paramMgr->getComponentForParam("RC_CHAN_CNT").count() != 0) {
+        paramMgr->setPendingParam(0, "RC_CHAN_CNT", _chanCount);
+    }
+
     //let the param mgr manage sending all the pending RC_foo updates and persisting after
     paramMgr->sendPendingParameters(true, true);
     
@@ -1070,14 +1078,6 @@ void PX4RCCalibration::_showTrimOnRadioWidgets(bool show)
     }
 }
 
-void PX4RCCalibration::_parameterListUpToDate(void)
-{
-    _parameterListUpToDateSignalled = true;
-    
-    if (_currentStep == -1) {
-        _setInternalCalibrationValuesFromParameters();
-    }
-}
 
 void PX4RCCalibration::_loadSettings(void)
 {

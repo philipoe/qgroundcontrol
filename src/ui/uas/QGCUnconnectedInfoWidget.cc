@@ -10,9 +10,8 @@ QGCUnconnectedInfoWidget::QGCUnconnectedInfoWidget(QWidget *parent) :
     ui(new Ui::QGCUnconnectedInfoWidget)
 {
     ui->setupUi(this);
-
     //connect(ui->simulationButton, SIGNAL(clicked()), this, SLOT(simulate()));
-    connect(ui->connectButton, SIGNAL(clicked()), this, SLOT(addLink()));
+    //connect(ui->connectButton, SIGNAL(clicked()), this, SLOT(addLink()));
 }
 
 QGCUnconnectedInfoWidget::~QGCUnconnectedInfoWidget()
@@ -25,12 +24,13 @@ QGCUnconnectedInfoWidget::~QGCUnconnectedInfoWidget()
  */
 void QGCUnconnectedInfoWidget::simulate()
 {
+    // TODO What is this?
     // Try to get reference to MAVLinkSimulationlink
     QList<LinkInterface*> links = LinkManager::instance()->getLinks();
     foreach(LinkInterface* link, links) {
         MAVLinkSimulationLink* sim = dynamic_cast<MAVLinkSimulationLink*>(link);
         if (sim) {
-            sim->connectLink();
+            LinkManager::instance()->connectLink(sim);
         }
     }
 }
@@ -40,5 +40,6 @@ void QGCUnconnectedInfoWidget::simulate()
  */
 void QGCUnconnectedInfoWidget::addLink()
 {
-    MainWindow::instance()->addLink();
+    // TODO This doesn't make sense. If you want to connect, use the connect on the toolbar
+    //MainWindow::instance()->addLink();
 }
