@@ -350,7 +350,7 @@ FORMS += \
     src/ui/QGCMapRCToParamDialog.ui \
     src/ui/QGCLinkConfiguration.ui \
     src/ui/QGCCommConfiguration.ui \
-    src/ui/QGCUDPLinkConfiguration.ui
+    src/ui/QGCUDPLinkConfiguration.ui \
     src/ui/AutoTrim.ui
 
 HEADERS += \
