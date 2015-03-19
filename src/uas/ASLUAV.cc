@@ -163,15 +163,6 @@ void ASLUAV::receiveMessage(LinkInterface *link, mavlink_message_t message)
 				//The rest of the message handling (i.e. adding data to the plots) is done elsewhere
 				break;
 			}
-			case MAVLINK_MSG_ID_VFR_HUD:
-			{
-				// Emit custom_sensor_data updated signal. This is primarily for the autotune-widget
-				// Only send airspeed for now, because only this is needed by autotune-widget.
-				mavlink_vfr_hud_t data;	//TODO Note: It might be better to get this from a separate airspeed-mavlink-message, however that does not exist yet.
-				mavlink_msg_vfr_hud_decode(&message, &data);
-				emit AirspeedChanged(data.airspeed);
-				break;
-			}
 			case MAVLINK_MSG_ID_ASLCTRL_DATA:
 			{
 				mavlink_aslctrl_data_t data;

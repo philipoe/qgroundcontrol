@@ -2,7 +2,6 @@
 #include <QMessageBox>
 
 #include "..\uas\ASLUAV.h"
-#include "UASManager.h"
 
 #define MAVLINK_USE_CONVENIENCE_FUNCTIONS
 
@@ -60,7 +59,7 @@ void AutoTrim::ConnectToActiveUAS(void)
 
 	if(tempUAS != NULL) {
 		connect(tempUAS, SIGNAL(AslctrlDataChanged(float,float,float,float,float,float,float,float,float,float)), this, SLOT(OnAslctrlDataChanged(float,float,float,float,float,float,float,float,float,float)));
-		connect(tempUAS, SIGNAL(AirspeedChanged(float)), this, SLOT(OnAirspeedChanged(float)));
+		connect(tempUAS, SIGNAL(speedChanged(UASInterface*, double, double, quint64)), this, SLOT(OnSpeedChanged(UASInterface*, double, double, quint64)));
 		QMessageBox::information(this, tr("[AutoTrim] Connect"),tr("Connected to the active UAS!"), QMessageBox::Ok);
 		m_ui->pb_Connect->setEnabled(false);
 		m_ui->pb_StartTrim->setEnabled(true);
@@ -170,12 +169,12 @@ void AutoTrim::OnAslctrlDataChanged(float uElev, float uAil, float uRud, float u
 	UpdateElapsedTimeCounters();
 }
 
-void AutoTrim::OnAirspeedChanged(float airspeed)
+void AutoTrim::OnSpeedChanged(UASInterface* uas, double groundSpeed, double airspeed, quint64 timestamp)
 {
 	if(!bStarted) return;
 	
 	// Update avrg/accum values here. 
-	avg_airspeed = (avg_airspeed*n_airspeed + airspeed) / (n_airspeed + 1);
+	avg_airspeed = (avg_airspeed*n_airspeed + (float)airspeed) / (n_airspeed + 1);
 	
 	// Update text fields.
 	// 1) Current data fields

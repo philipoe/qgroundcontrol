@@ -3,6 +3,7 @@
 
 #include <QWidget>
 #include <QTime>
+#include "UASManager.h"
 #include "ui_AutoTrim.h"
 
 class AutoTrim : public QWidget
@@ -24,8 +25,8 @@ public slots:
 		
 	//External slots
     void OnAslctrlDataChanged(float uElev, float uAil, float uRud, float uThrot, float roll, float pitch, float yaw, float roll_ref, float pitch_ref,float h);
-	void OnAirspeedChanged(float airspeed);
-	
+	void OnSpeedChanged(UASInterface* uas, double groundSpeed, double airspeed, quint64 timestamp);
+
 private:
 	void SetTrimData(int velocityType);
 	void ResetData(void);
