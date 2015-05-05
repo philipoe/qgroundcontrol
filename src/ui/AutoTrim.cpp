@@ -1,7 +1,7 @@
 #include "AutoTrim.h"
 #include <QMessageBox>
 
-#include "..\uas\ASLUAV.h"
+#include "../uas/ASLUAV.h"
 
 #define MAVLINK_USE_CONVENIENCE_FUNCTIONS
 
