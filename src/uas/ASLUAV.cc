@@ -160,7 +160,22 @@ void ASLUAV::receiveMessage(LinkInterface *link, mavlink_message_t message)
 				
 				if (startVoltage_ext == -1.0f && currentVoltage > 0.1f) startVoltage_ext = currentVoltage_ext;
 
+				emit PowerDataChanged(lpVoltage_ext, data.adc121_cspb_amp, data.adc121_cs1_amp, data.adc121_cs2_amp);
 				//The rest of the message handling (i.e. adding data to the plots) is done elsewhere
+				break;
+			}
+			case MAVLINK_MSG_ID_SENS_MPPT:
+			{
+				mavlink_sens_mppt_t data;
+				mavlink_msg_sens_mppt_decode(&message, &data);
+				emit MPPTDataChanged(data.mppt1_volt, data.mppt1_amp, data.mppt1_pwm, data.mppt1_status, data.mppt2_volt, data.mppt2_amp, data.mppt2_pwm, data.mppt2_status, data.mppt3_volt, data.mppt3_amp, data.mppt3_pwm, data.mppt3_status);
+				break;
+			}
+			case MAVLINK_MSG_ID_SENS_BATMON:
+			{
+				mavlink_sens_batmon_t data;
+				mavlink_msg_sens_batmon_decode(&message, &data);
+				emit BatMonDataChanged(message.compid, data.voltage, data.current, data.SoC, data.temperature, data.batterystatus, data.hostfetcontrol, data.cellvoltage1, data.cellvoltage2, data.cellvoltage3, data.cellvoltage4, data.cellvoltage5, data.cellvoltage6);
 				break;
 			}
 			case MAVLINK_MSG_ID_ASLCTRL_DATA:

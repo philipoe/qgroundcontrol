@@ -68,6 +68,7 @@ This file is part of the QGROUNDCONTROL project
 #include "QGCFileDialog.h"
 #include "QGCMessageBox.h"
 #include "QGCDockWidget.h"
+#include "energybudget.h"
 
 #ifdef QGC_USE_ASLUAV_MESSAGES
 #include "AutoTrim.h"
@@ -102,6 +103,7 @@ const char* MainWindow::_hudDockWidgetName = "HEAD_UP_DISPLAY_DOCKWIDGET";
 const char* MainWindow::_uasInfoViewDockWidgetName = "UAS_INFO_INFOVIEW_DOCKWIDGET";
 const char* MainWindow::_debugConsoleDockWidgetName = "COMMUNICATION_CONSOLE_DOCKWIDGET";
 const char* MainWindow::_AutoTrimDockWidgetName = "AUTOTRIM_DOCKWIDGET";
+const char* MainWindow::_aslEnergyBudgetWidgetName = "ENERGY_BUDGET_DOCKWIDGET";
 
 static MainWindow* _instance = NULL;   ///< @brief MainWindow singleton
 
@@ -428,7 +430,8 @@ void MainWindow::_buildCommonWidgets(void)
         { _hudDockWidgetName,               "Video Downlink",           Qt::RightDockWidgetArea },
         { _uasInfoViewDockWidgetName,       "Info View",                Qt::LeftDockWidgetArea },
         { _debugConsoleDockWidgetName,      "Communications Console",   Qt::LeftDockWidgetArea },
-		{ _AutoTrimDockWidgetName,          "Auto Trim",                Qt::RightDockWidgetArea }
+		{ _AutoTrimDockWidgetName,          "Auto Trim",                Qt::RightDockWidgetArea },
+		{ _aslEnergyBudgetWidgetName,		"Energy Budget",			Qt::RightDockWidgetArea }
 		
     };
     static const size_t cDockWidgetInfo = sizeof(rgDockWidgetInfo) / sizeof(rgDockWidgetInfo[0]);
@@ -580,6 +583,8 @@ void MainWindow::_createInnerDockWidget(const QString& widgetName)
         widget = new HUD(320,240,this);
     } else if (widgetName == _uasInfoViewDockWidgetName) {
         widget = new QGCTabbedInfoView(this);
+	} else if (widgetName == _aslEnergyBudgetWidgetName) {
+		widget = new EnergyBudget(this);
     } else if (widgetName == _debugConsoleDockWidgetName) {
         widget = new DebugConsole(this);
 	} else if (widgetName == _AutoTrimDockWidgetName) {

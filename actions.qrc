@@ -25,5 +25,10 @@
         <file>files/images/actions/qgroundcontrol-apm.svg</file>
         <file>files/images/actions/qgroundcontrol-ardrone.svg</file>
         <file>files/images/actions/qgroundcontrol-wifi.svg</file>
+        <file>files/images/actions/qgroundcontrol-generic.svg</file>
+        <file>files/images/actions/qgroundcontrol-px4.svg</file>
+        <file>files/images/actions/qgroundcontrol-apm.svg</file>
+        <file>files/images/actions/qgroundcontrol-ardrone.svg</file>
+        <file>files/images/actions/qgroundcontrol-wifi.svg</file>
     </qresource>
 </RCC>

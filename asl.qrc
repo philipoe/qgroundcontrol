@@ -1,0 +1,7 @@
+<RCC>
+    <qresource prefix="/">
+        <file>files/images/energyWidget/Battery.png</file>
+        <file>files/images/energyWidget/prop.JPG</file>
+        <file>files/images/energyWidget/solarcell.png</file>
+    </qresource>
+</RCC>

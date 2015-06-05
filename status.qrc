@@ -24,6 +24,8 @@
         <file>files/images/status/mail-attachment.svg</file>
         <file>files/images/status/image-missing.svg</file>
         <file>files/images/status/image-loading.svg</file>
+        <file>files/images/status/dialog-error.svg</file>
+        <file>files/images/status/dialog-warning.svg</file>
         <file>files/images/status/folder-visiting.svg</file>
         <file>files/images/status/folder-open.svg</file>
         <file>files/images/status/folder-drag-accept.svg</file>
@@ -34,5 +36,14 @@
         <file>files/images/status/audio-volume-low.svg</file>
         <file>files/images/status/audio-volume-high.svg</file>
         <file>files/images/status/colorbars.png</file>
+        <file>files/images/status/gps.svg</file>
+        <file>files/images/status/battery_0.svg</file>
+        <file>files/images/status/battery_20.svg</file>
+        <file>files/images/status/battery_40.svg</file>
+        <file>files/images/status/battery_60.svg</file>
+        <file>files/images/status/battery_80.svg</file>
+        <file>files/images/status/battery_100.svg</file>
+        <file>files/images/status/message_megaphone.png</file>
+        <file>files/images/status/message_triangle.png</file>
     </qresource>
 </RCC>

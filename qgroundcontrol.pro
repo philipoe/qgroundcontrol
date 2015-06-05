@@ -241,7 +241,8 @@ RESOURCES += qgroundcontrol.qrc \
     firmware.qrc \
     mavs.qrc \
     px4.qrc \
-    status.qrc
+    status.qrc \
+	asl.qrc
 
 TRANSLATIONS += \
     es-MX.ts \
@@ -351,6 +352,7 @@ FORMS += \
     src/ui/QGCLinkConfiguration.ui \
     src/ui/QGCCommConfiguration.ui \
     src/ui/QGCUDPLinkConfiguration.ui \
+    src/ui/energybudget.ui \
     src/ui/AutoTrim.ui
 
 HEADERS += \
@@ -505,6 +507,7 @@ HEADERS += \
     src/ui/toolbar/MainToolBar.h \
     src/QmlControls/ScreenTools.h \
     src/uas/ASLUAV.h \
+    src/ui/energybudget.h \
     src/ui/AutoTrim.h
 
 SOURCES += \
@@ -648,6 +651,7 @@ SOURCES += \
     src/uas/UASMessageHandler.cc \
     src/ui/toolbar/MainToolBar.cc \
     src/QmlControls/ScreenTools.cc \
+    src/ui/energybudget.cpp \
     src/uas/ASLUAV.cc \
     src/ui/AutoTrim.cpp
 
