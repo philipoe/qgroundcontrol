@@ -135,9 +135,8 @@ void ASLUAV::receiveMessage(LinkInterface *link, mavlink_message_t message)
                 mavlink_msg_sens_power_decode(&message, &data);
 
 				// Battery charge/time remaining/voltage calculations
-				currentVoltage_ext = data.adc121_vspb_volt;
-				lpVoltage_ext = filterVoltage(currentVoltage_ext);
-				tickLowpassVoltage_ext = tickLowpassVoltage_ext*0.8f + 0.2f*currentVoltage_ext;
+				lpVoltage_ext = data.adc121_vspb_volt;
+				tickLowpassVoltage_ext = tickLowpassVoltage_ext*0.8f + 0.2f*data.adc121_vspb_volt;
 				// We don't want to tick above the threshold
 				if (tickLowpassVoltage_ext > tickVoltage_ext)
 				{
