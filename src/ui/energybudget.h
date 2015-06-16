@@ -35,6 +35,7 @@ protected:
 	QGraphicsTextItem *m_cellPowerText;
 	QGraphicsTextItem *m_cellUsePowerText;
 	QGraphicsTextItem *m_batUsePowerText;
+	QGraphicsTextItem *m_SystemUsePowerText;
 	float m_cellPower;
 	float m_batUsePower;
 	float m_propUsePower;

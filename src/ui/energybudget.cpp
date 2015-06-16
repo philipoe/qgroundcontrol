@@ -33,6 +33,7 @@ m_chargePowerText(m_scene->addText(QString("???"))),
 m_cellPowerText(m_scene->addText(QString("???"))),
 m_cellUsePowerText(m_scene->addText(QString("???"))),
 m_batUsePowerText(m_scene->addText(QString("???"))),
+m_SystemUsePowerText(m_scene->addText(QString("???"))),
 m_cellPower(0.0),
 m_batUsePower(0.0),
 m_propUsePower(0.0),
@@ -102,6 +103,9 @@ void EnergyBudget::buildGraphicsImage()
 	m_cellUsePowerText->setPos(propRect.x() + propRect.width() / 2.0 + 2*penWidth, (propRect.y() + cellRect.y() + cellRect.height()) / 2.0);
 	m_cellUsePowerText->setFont(QFont("Helvetica", penWidth*1.2));
 	m_cellUsePowerText->setDefaultTextColor(QColor(Qt::white));
+	m_SystemUsePowerText->setPos(propRect.x() + propRect.width()/2.0 -1.0*penWidth, propRect.y() + propRect.height());
+	m_SystemUsePowerText->setFont(QFont("Helvetica", penWidth*1.2));
+	m_SystemUsePowerText->setDefaultTextColor(QColor(Qt::white));
 
 	// Recalc scene bounding rect
 	m_scene->setSceneRect(QRectF(0.0, 0.0, 0.0, 0.0));
@@ -116,6 +120,7 @@ qreal EnergyBudget::adjustImageScale(const QRectF &viewSize, QRectF &img)
 void EnergyBudget::updatePower(float volt, float currpb, float curr_1, float curr_2)
 {
 	m_propUsePower = volt*currpb;
+	m_SystemUsePowerText->setPlainText(QString("%1W").arg(m_propUsePower, 0, 'f', 1));
 	ui->powerA1Value->setText(QString("%1").arg(curr_1));
 	ui->powerA2Value->setText(QString("%1").arg(curr_2));
 	ui->powerAValue->setText(QString("%1").arg(currpb));
