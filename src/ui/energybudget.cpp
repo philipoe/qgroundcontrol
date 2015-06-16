@@ -90,16 +90,19 @@ void EnergyBudget::buildGraphicsImage()
 	m_batToPropPath->setPen(QPen(QBrush(Qt::GlobalColor::red, Qt::BrushStyle::SolidPattern), penWidth));
 	m_batToPropPath->setPath(m_batToPropPath->mapFromScene(bat2PropPath));
 	// Add text
-	m_chargePowerText->setPos(batRect.x() + batRect.width() / 2.0 - 2*penWidth, (batRect.y() + cellRect.y()+cellRect.height())/ 2.0);
-	m_chargePowerText->setRotation(-90.0);
-	m_chargePowerText->setFont(QFont("Helvetica", penWidth));
-	m_batUsePowerText->setPos((batRect.x() + propRect.x()) / 2.0, batRect.y() + batRect.height() / 2.0 - 2*penWidth);
-	m_batUsePowerText->setFont(QFont("Helvetica", penWidth));
+	m_chargePowerText->setPos(batRect.x() + batRect.width() / 2.0 - 5*penWidth, (batRect.y() + cellRect.y()+cellRect.height())/ 2.0);
+	m_chargePowerText->setDefaultTextColor(QColor(Qt::white));
+	m_chargePowerText->setFont(QFont("Helvetica", penWidth*1.2));
+	m_batUsePowerText->setPos((batRect.x() + propRect.x()) / 2.0, batRect.y() + batRect.height() / 2.0 - 3*penWidth);
+	m_batUsePowerText->setFont(QFont("Helvetica", penWidth*1.2));
+	m_batUsePowerText->setDefaultTextColor(QColor(Qt::white));
 	m_cellPowerText->setPos(cellRect.x()+cellRect.width()/2.0, cellRect.y() - 2*penWidth);
-	m_cellPowerText->setFont(QFont("Helvetica", penWidth));
+	m_cellPowerText->setFont(QFont("Helvetica", penWidth*1.2));
+	m_cellPowerText->setDefaultTextColor(QColor(Qt::white));
 	m_cellUsePowerText->setPos(propRect.x() + propRect.width() / 2.0 + 2*penWidth, (propRect.y() + cellRect.y() + cellRect.height()) / 2.0);
-	m_cellUsePowerText->setRotation(90.0);
-	m_cellUsePowerText->setFont(QFont("Helvetica", penWidth));
+	m_cellUsePowerText->setFont(QFont("Helvetica", penWidth*1.2));
+	m_cellUsePowerText->setDefaultTextColor(QColor(Qt::white));
+
 	// Recalc scene bounding rect
 	m_scene->setSceneRect(QRectF(0.0, 0.0, 0.0, 0.0));
 }
@@ -229,7 +232,7 @@ void EnergyBudget::updateGraphicsImage()
 	{
 		m_chargePath->setVisible(true);
 		m_chargePowerText->setVisible(true);
-		m_chargePowerText->setPlainText(QString("%1").arg(m_chargePower));
+		m_chargePowerText->setPlainText(QString("%1W").arg(m_chargePower, 0, 'f', 1));
 		m_batToPropPath->setVisible(false);
 		m_batUsePowerText->setVisible(false);
 	}
@@ -239,27 +242,27 @@ void EnergyBudget::updateGraphicsImage()
 		m_chargePowerText->setVisible(false);
 		m_batToPropPath->setVisible(true);
 		m_batUsePowerText->setVisible(true);
-		m_batUsePowerText->setPlainText(QString("%1").arg(m_batUsePower));
+		m_batUsePowerText->setPlainText(QString("%1W").arg(m_batUsePower, 0, 'f', 1));
 	}
 	if (m_cellPower > CELLPOWERTHRESHHOLD)
 	{
 		m_cellToPropPath->setVisible(true);
-		m_cellPowerText->setPlainText(QString("%1").arg(m_cellPower));
+		m_cellPowerText->setPlainText(QString("%1W").arg(m_cellPower, 0, 'f', 1));
 		m_cellUsePowerText->setVisible(true);
 		if (m_batCharging)
 		{
-			m_cellUsePowerText->setPlainText(QString("%1").arg(m_cellPower-m_batCharging));
+			m_cellUsePowerText->setPlainText(QString("%1W").arg(m_cellPower - m_batCharging, 0, 'f', 1));
 		}
 		else
 		{
-			m_cellUsePowerText->setPlainText(QString("%1").arg(m_cellPower));
+			m_cellUsePowerText->setPlainText(QString("%1W").arg(m_cellPower, 0, 'f', 1));
 		}
 	}
 	else
 	{
 		m_cellToPropPath->setVisible(false);
 		m_cellUsePowerText->setVisible(false);
-		m_cellPowerText->setPlainText(QString("0"));
+		m_cellPowerText->setPlainText(QString("0W"));
 	}
 }
 
