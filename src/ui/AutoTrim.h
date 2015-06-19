@@ -35,8 +35,9 @@ private:
 private:
 	Ui::AutoTrim *m_ui;	
 
+	bool bConnected;	// Connected to a UAS?
 	bool bStarted;		// Data recording started?
-	
+		
 	QTime tElapsedSinceStart;
 
 	int n_u;
