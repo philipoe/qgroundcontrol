@@ -1,6 +1,5 @@
 #include "AutoTrim.h"
 #include <QMessageBox>
-
 #include "../uas/ASLUAV.h"
 
 #define MAVLINK_USE_CONVENIENCE_FUNCTIONS
@@ -61,6 +60,7 @@ void AutoTrim::ConnectToActiveUAS(void)
 	if(tempUAS != NULL) {
 		connect(tempUAS, SIGNAL(AslctrlDataChanged(float,float,float,float,float,float,float,float,float,float)), this, SLOT(OnAslctrlDataChanged(float,float,float,float,float,float,float,float,float,float)));
 		connect(tempUAS, SIGNAL(speedChanged(UASInterface*, double, double, quint64)), this, SLOT(OnSpeedChanged(UASInterface*, double, double, quint64)));
+		connect(tempUAS, SIGNAL(PowerDataChanged(float,float,float,float)), this, SLOT(OnPowerDataChanged(float,float,float,float)));
 		QMessageBox::information(this, tr("[AutoTrim] Connect"),tr("Connected to the active UAS!"), QMessageBox::Ok);
 		m_ui->pb_Connect->setEnabled(false);
 		m_ui->pb_StartTrim->setEnabled(true);
@@ -129,16 +129,16 @@ void AutoTrim::OnAslctrlDataChanged(float uElev, float uAil, float uRud, float u
 {
 	if (bConnected){
 		// Update current data text fields.
-		m_ui->e_cur_uElev->setText(QString::number(uElev));
-		m_ui->e_cur_uAil->setText(QString::number(uAil));
-		m_ui->e_cur_uRud->setText(QString::number(uRud));
-		m_ui->e_cur_uThrot->setText(QString::number(uThrot));
-		m_ui->e_cur_roll->setText(QString::number(roll));
-		m_ui->e_cur_pitch->setText(QString::number(pitch));
-		m_ui->e_ref_roll->setText(QString::number(roll_ref));
-		m_ui->e_ref_pitch->setText(QString::number(pitch_ref));
-		m_ui->e_cur_h->setText(QString::number(h));
-		m_ui->e_cur_yaw->setText(QString::number(yaw));
+		m_ui->e_cur_uElev->setText(QString("%1").arg(uElev, 0, 'f', 4));
+		m_ui->e_cur_uAil->setText(QString("%1").arg(uAil, 0, 'f', 4));
+		m_ui->e_cur_uRud->setText(QString("%1").arg(uRud, 0, 'f', 4));
+		m_ui->e_cur_uThrot->setText(QString("%1").arg(uThrot, 0, 'f', 4));
+		m_ui->e_cur_roll->setText(QString("%1").arg(roll, 0, 'f', 2));
+		m_ui->e_cur_pitch->setText(QString("%1").arg(pitch, 0, 'f', 2));
+		m_ui->e_ref_roll->setText(QString("%1").arg(roll_ref, 0, 'f', 2));
+		m_ui->e_ref_pitch->setText(QString("%1").arg(pitch_ref, 0, 'f', 2));
+		m_ui->e_cur_h->setText(QString("%1").arg(h, 0, 'f', 2));
+		m_ui->e_cur_yaw->setText(QString("%1").arg(yaw, 0, 'f', 2));
 	}
 	
 	if (bStarted) {
@@ -154,14 +154,14 @@ void AutoTrim::OnAslctrlDataChanged(float uElev, float uAil, float uRud, float u
 		if (n_att == 0) yaw_Start = yaw;
 
 		// Update accumulated & average data fields
-		m_ui->e_avg_uElev->setText(QString::number(avg_uElev));
-		m_ui->e_avg_uAil->setText(QString::number(avg_uAil));
-		m_ui->e_avg_uRud->setText(QString::number(avg_uRud));
-		m_ui->e_avg_uThrot->setText(QString::number(avg_uThrot));
-		m_ui->e_avg_roll->setText(QString::number(avg_roll));
-		m_ui->e_avg_pitch->setText(QString::number(avg_pitch));
-		m_ui->e_delta_h->setText(QString::number(h - h_Start));
-		m_ui->e_delta_yaw->setText(QString::number(yaw - yaw_Start));
+		m_ui->e_avg_uElev->setText(QString("%1").arg(avg_uElev, 0, 'f', 4));
+		m_ui->e_avg_uAil->setText(QString("%1").arg(avg_uAil, 0, 'f', 4));
+		m_ui->e_avg_uRud->setText(QString("%1").arg(avg_uRud, 0, 'f', 4));
+		m_ui->e_avg_uThrot->setText(QString("%1").arg(avg_uThrot, 0, 'f', 4));
+		m_ui->e_avg_roll->setText(QString("%1").arg(avg_roll, 0, 'f', 2));
+		m_ui->e_avg_pitch->setText(QString("%1").arg(avg_pitch, 0, 'f', 2));
+		m_ui->e_delta_h->setText(QString("%1").arg(h-h_Start, 0, 'f', 2));
+		m_ui->e_delta_yaw->setText(QString("%1").arg(yaw-yaw_Start, 0, 'f', 2));
 
 		// Increase counters
 		n_u += 1;
@@ -177,16 +177,36 @@ void AutoTrim::OnSpeedChanged(UASInterface* uas, double groundSpeed, double airs
 {
 	if (bConnected) {
 		// Update current data text fields.
-		m_ui->e_cur_airspeed->setText(QString::number(airspeed));
+		m_ui->e_cur_airspeed->setText(QString("%1").arg(airspeed, 0, 'f', 2));
 	}
 	
 	if (bStarted) {
 		// Update avrg/accum values here. 
 		avg_airspeed = (avg_airspeed*n_airspeed + (float)airspeed) / (n_airspeed + 1);
-		m_ui->e_avg_airspeed->setText(QString::number(avg_airspeed));
+		m_ui->e_avg_airspeed->setText(QString("%1").arg(avg_airspeed, 0, 'f', 2));
 
 		// Increase counters
 		n_airspeed += 1;
+
+		//Update elapsed time and counters
+		UpdateElapsedTimeCounters();
+	}
+}
+
+void AutoTrim::OnPowerDataChanged(float volt, float currpb, float curr_1, float curr_2)
+{
+	if (bConnected) {
+		// Update current data text fields.
+		m_ui->e_cur_power->setText(QString("%1").arg(volt*currpb, 0, 'f', 2));
+	}
+
+	if (bStarted) {
+		// Update avrg/accum values here. 
+		avg_power = (avg_power*n_power + volt*currpb) / (n_power + 1);
+		m_ui->e_avg_power->setText(QString("%1").arg(avg_power, 0, 'f', 2));
+
+		// Increase counters
+		n_power += 1;
 
 		//Update elapsed time and counters
 		UpdateElapsedTimeCounters();
@@ -210,7 +230,10 @@ void AutoTrim::ResetData()
 
 	n_airspeed=0;
 	avg_airspeed=0.0f;
-
+	
+	n_power=0;
+	avg_power=0.0f;
+	
 	n_h=0;
 	h_Start=0.0f;
 }
@@ -218,7 +241,7 @@ void AutoTrim::ResetData()
 void AutoTrim::UpdateElapsedTimeCounters(void)
 {
 	float time_seconds=((float)tElapsedSinceStart.elapsed()/1000.0f);
-	m_ui->e_timeelapsed->setText(QString("%1s").arg(QString::number(time_seconds)));
+	m_ui->e_timeelapsed->setText(QString("%1s").arg(time_seconds, 0, 'f', 2));
 	QString temp=QString("%1;%2").arg(n_u).arg(n_airspeed);
 	m_ui->e_counters->setText(temp);
 }
