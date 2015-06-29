@@ -10,6 +10,8 @@
 #include "../uas/ASLUAV.h"
 #include "UASInterface.h"
 #include "UASManager.h"
+#include "GAudioOutput.h"
+#include <iostream>
 
 #define OVERVIEWTOIMAGEHEIGHTSCALE (3.0)
 #define OVERVIEWTOIMAGEWIDTHSCALE (3.0)
@@ -39,7 +41,8 @@ m_cellPower(0.0),
 m_batUsePower(0.0),
 m_propUsePower(0.0),
 m_chargePower(0.0),
-m_batCharging(true)
+m_batCharging(true),
+m_bMotorFailureWarning(false)
 {
     ui->setupUi(this);
 	ui->overviewGraphicsView->setHorizontalScrollBarPolicy(Qt::ScrollBarPolicy::ScrollBarAlwaysOff);
@@ -50,6 +53,7 @@ m_batCharging(true)
 	connect(UASManager::instance(), SIGNAL(activeUASSet(UASInterface*)), this, SLOT(setActiveUAS(UASInterface*)));
 	connect(ui->ResetMPPTButton, SIGNAL(clicked()), this, SLOT(ResetMPPTCmd()));
 	ui->ResetMPPTEdit->setValidator(new QIntValidator(this));
+	connect(ui->MotorFailWarnCheckBox, SIGNAL(stateChanged(int)), this, SLOT(UpdateMotorFailWarnCheckBox(int)));
 	if (UASManager::instance()->getActiveUAS())
 	{
 		setActiveUAS(UASManager::instance()->getActiveUAS());
@@ -129,7 +133,9 @@ void EnergyBudget::updatePower(float volt, float currpb, float curr_1, float cur
 	ui->powerAValue->setText(QString("%1").arg(currpb));
 	ui->powerVValue->setText(QString("%1").arg(volt));
 
-	updateGraphicsImage();
+	CheckMotorFailure();
+
+	updateGraphicsImage();	
 }
 
 void EnergyBudget::updateBatMon(uint8_t compid, uint16_t volt, int16_t current, uint8_t soc, float temp, uint16_t batStatus, uint16_t hostfetcontrol, uint16_t cellvolt1, uint16_t cellvolt2, uint16_t cellvolt3, uint16_t cellvolt4, uint16_t cellvolt5, uint16_t cellvolt6)
@@ -234,6 +240,12 @@ void EnergyBudget::updateMPPT(float volt1, float amp1, uint16_t pwm1, uint8_t st
 	updateGraphicsImage();
 }
 
+void EnergyBudget::updateAslctrlData(float uElev, float uAil, float uRud, float uThrot, float roll, float pitch, float yaw, float roll_ref, float pitch_ref, float h)
+{
+	m_uThrot = uThrot;
+	CheckMotorFailure();
+}
+
 void EnergyBudget::updateGraphicsImage()
 {
 	if (m_batCharging)
@@ -286,7 +298,7 @@ void EnergyBudget::setActiveUAS(UASInterface *uas)
 	disconnect(this, SLOT(updatePower(float, float, float, float)));
 	disconnect(this, SLOT(updateMPPT(float, float, uint16_t, uint8_t, float, float, uint16_t, uint8_t, float, float, uint16_t, uint8_t)));
 	disconnect(this, SLOT(updateBatMon(uint8_t, uint16_t, int16_t, uint8_t, float, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t)));
-
+	disconnect(this, SLOT(updateAslctrlData(uint8_t, uint16_t, int16_t, uint8_t, float, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t)));
 	//connect the uas if asluas
 	ASLUAV *asluas = dynamic_cast<ASLUAV*>(uas);
 	if (asluas)
@@ -294,6 +306,7 @@ void EnergyBudget::setActiveUAS(UASInterface *uas)
 		connect(asluas, SIGNAL(PowerDataChanged(float, float, float, float)), this, SLOT(updatePower(float, float, float, float)));
 		connect(asluas, SIGNAL(MPPTDataChanged(float, float, uint16_t, uint8_t, float, float, uint16_t, uint8_t, float, float, uint16_t, uint8_t)), this, SLOT(updateMPPT(float, float, uint16_t, uint8_t, float, float, uint16_t, uint8_t, float, float, uint16_t, uint8_t)));
 		connect(asluas, SIGNAL(BatMonDataChanged(uint8_t, uint16_t, int16_t, uint8_t, float, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t)), this, SLOT(updateBatMon(uint8_t, uint16_t, int16_t, uint8_t, float, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t)));
+		connect(asluas, SIGNAL(AslctrlDataChanged(float, float, float, float, float, float, float, float, float, float)), this, SLOT(updateAslctrlData(float, float, float, float, float, float, float, float, float, float)));
 	}
 	//else set to standard output
 	else
@@ -373,4 +386,42 @@ void EnergyBudget::ResetMPPTCmd()
 		if (tempUAS) tempUAS->SendCommandLong(MAV_CMD_RESET_MPPT, (float) MPPTNr);
 	}
 
+}
+
+const int MOTOR_FAILURE_WAIT_TIME = 5000; // [ms]
+
+void EnergyBudget::CheckMotorFailure(void)
+{
+	if (ui->MotorFailWarnCheckBox->isChecked())
+	{
+		// Is the instantaneous motor power at the given throttle setting suspiciously low?
+		bool bMotorPowerTooLow = false;
+		if (m_uThrot > ui->MotorFailWarnThrottleLineEdit->text().toFloat() && m_propUsePower < ui->MotorFailWarnPowerLineEdit->text().toFloat()) {
+			bMotorPowerTooLow = true;
+		}
+
+		// Change the warning state according to the result of the first step above
+		if (!bMotorPowerTooLow) {
+			m_MotorFailureTimer.restart();
+			m_bMotorFailureWarning = false;
+		}
+		else if (bMotorPowerTooLow && m_MotorFailureTimer.elapsed() > MOTOR_FAILURE_WAIT_TIME) 
+		{
+			m_bMotorFailureWarning = true;
+			GAudioOutput::instance()->say(QString("Warning: Potential motor failure."));
+			m_MotorFailureTimer.restart(); // Restart only to limit audio warnings to every MOTOR_FAILURE_WAIT_TIME milliseconds
+		}
+	}
+}
+
+void EnergyBudget::UpdateMotorFailWarnCheckBox(int state)
+{
+	if (state == Qt::Checked) {
+		ui->MotorFailWarnPowerLineEdit->setEnabled(true);
+		ui->MotorFailWarnThrottleLineEdit->setEnabled(true);
+	}
+	else if (state == Qt::Unchecked) {
+		ui->MotorFailWarnPowerLineEdit->setEnabled(false);
+		ui->MotorFailWarnThrottleLineEdit->setEnabled(false);
+	}
 }

@@ -2,6 +2,7 @@
 #define ENERGYBUDGET_H
 
 #include <QWidget>
+#include <QTime>
 #include <stdint.h>
 
 namespace Ui {
@@ -41,6 +42,10 @@ protected:
 	float m_propUsePower;
 	float m_chargePower;
 	bool m_batCharging;
+	float m_uThrot;
+	QTime m_MotorFailureTimer;
+
+	bool m_bMotorFailureWarning;
 
 	void buildGraphicsImage();
 	qreal adjustImageScale(const QRectF &, QRectF&);
@@ -50,13 +55,17 @@ protected:
 	QString convertBatteryStatus(uint16_t);
 	QString convertMPPTStatus(uint8_t bit);
 
+	void CheckMotorFailure(void);
+
 protected slots:
 	void updatePower(float volt, float currpb, float curr_1, float curr_2);
 	void updateMPPT(float volt1, float amp1, uint16_t pwm1, uint8_t status1, float volt2, float amp2, uint16_t pwm2, uint8_t status2, float volt3, float amp3, uint16_t pwm3, uint8_t status3);
 	void updateBatMon(uint8_t compid, uint16_t volt, int16_t current, uint8_t soc, float temp, uint16_t batStatus, uint16_t hostfetcontrol, uint16_t cellvolt1, uint16_t cellvolt2, uint16_t cellvolt3, uint16_t cellvolt4, uint16_t cellvolt5, uint16_t cellvolt6);
+	void updateAslctrlData(float uElev, float uAil, float uRud, float uThrot, float roll, float pitch, float yaw, float roll_ref, float pitch_ref, float h);
 	void setActiveUAS(UASInterface *uas);
 
 	void ResetMPPTCmd();
+	void UpdateMotorFailWarnCheckBox(int state);
 };
 
 #endif // ENERGYBUDGET_H
